@@ -1,0 +1,8 @@
+需求：
+1、环境配置：sqlite（数据库）+ antd/elements-ui（前端UI）+ nodejs|php|java|python3|golang|lua|c++（后端服务） （10分）
+2、数据处理：提取test.csv原始数据，完成数据分析整理，数据结构设计，并编写bat|shell|python脚本导入数据到数据库 （20分） 
+3、前端页面：首页(数据概览页) + 数据详情页（图片供参考，具体展示以提供数据为准）	（30分）
+4、数据服务：编写数据接口，读取数据库，计算af_purchase事件价值为基础的用户LTV，注意event_revenue_currency统一转为USD，提供给前端展示  （30分） 
+5、编写 bat/shell/python 脚本，一键安装运行启动浏览器展示demo	（10分）
+
+注：根据自己习惯选择windows或者linux环境开发，选择以上前端框架和后端语言中的一种进行开发，test.csv的分析和导入数据，可以通过脚本编写，脚本语言选择自己熟悉的语言

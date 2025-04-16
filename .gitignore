@@ -1,0 +1,109 @@
+# 通用部分
+node_modules/
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.log
+*.swp
+*~
+.idea/
+.vscode/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 前端部分
+# 前端依赖
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.js
+
+# 测试覆盖率报告
+frontend/coverage/
+
+# 生产环境构建文件
+frontend/build/
+
+# 杂项
+frontend/.DS_Store
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# 日志文件
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# 后端部分
+# 编译输出文件
+backend/build/
+backend/bin/
+backend/lib/
+backend/obj/
+
+# CMake生成文件
+backend/CMakeFiles/
+backend/CMakeCache.txt
+backend/cmake_install.cmake
+backend/Makefile
+backend/*.cmake
+
+# 编译中间文件
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.dylib
+*.exe
+*.out
+*.app
+
+# 数据库部分
+# SQLite数据库文件
+database/*.db
+database/*.db-journal
+*.sqlite
+*.sqlite3
+
+# 数据处理部分
+# Python虚拟环境
+venv/
+env/
+.venv/
+.env/
+ENV/
+
+# Python缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# 数据文件
+*.csv
+*.xls
+*.xlsx
+!后端考核/test.csv  # 排除原始测试数据
+
+# 其他
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.bak
+
+# 系统文件
+Thumbs.db
+desktop.ini
+

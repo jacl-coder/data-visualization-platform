@@ -1,0 +1,11 @@
+其中：
+	event_name   ：事件名，
+	event_value  ：事件值，
+	created_date ：事件日期
+	appsflyer_id ：用户编码
+    	country_code ：国家编码
+    	device_model ：设备型号
+	event_revenue: 收入字段
+
+需统计指标：统计概览： 用户数、事件数、设备数 等（其他可自由发挥。）以及 各日期范围对应指标值（table）
+            详情页：国家用户占比图、国家收入占比图 、设备用户占比图、设备收入占比图，收入时间曲线、用户时间曲线 ，数据详情（table） 等。
