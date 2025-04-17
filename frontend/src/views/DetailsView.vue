@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts/core'
 import { PieChart, LineChart } from 'echarts/charts'
@@ -56,8 +56,11 @@ const loadCountryData = async () => {
     if (response && response.status === 'success') {
       countryData.value = response.data.items || []
       renderCountryChart()
+    } else if (response) {
+      ElMessage.warning(response.message || '获取国家数据格式不正确')
+      countryData.value = []
     } else {
-      ElMessage.warning(response?.message || '获取国家数据格式不正确')
+      // API已经在内部处理了错误，这里不需要再显示消息
       countryData.value = []
     }
   } catch (error) {
@@ -77,8 +80,11 @@ const loadDeviceData = async () => {
     if (response && response.status === 'success') {
       deviceData.value = response.data.items || []
       renderDeviceChart()
+    } else if (response) {
+      ElMessage.warning(response.message || '获取设备数据格式不正确')
+      deviceData.value = []
     } else {
-      ElMessage.warning(response?.message || '获取设备数据格式不正确')
+      // API已经在内部处理了错误，这里不需要再显示消息
       deviceData.value = []
     }
   } catch (error) {
@@ -98,8 +104,11 @@ const loadTimelineData = async () => {
     if (response && response.status === 'success') {
       timelineData.value = response.data.items || []
       renderTimelineChart()
+    } else if (response) {
+      ElMessage.warning(response.message || '获取时间线数据格式不正确')
+      timelineData.value = []
     } else {
-      ElMessage.warning(response?.message || '获取时间线数据格式不正确')
+      // API已经在内部处理了错误，这里不需要再显示消息
       timelineData.value = []
     }
   } catch (error) {
@@ -118,8 +127,11 @@ const loadDetailsData = async (date: string) => {
     const response = await getDetailsData(date)
     if (response && response.status === 'success') {
       detailsData.value = response.data
+    } else if (response) {
+      ElMessage.warning(response.message || '获取详情数据格式不正确')
+      detailsData.value = createEmptyDetailsData(date)
     } else {
-      ElMessage.warning(response?.message || '获取详情数据格式不正确')
+      // API已经在内部处理了错误，这里不需要再显示消息
       detailsData.value = createEmptyDetailsData(date)
     }
   } catch (error) {
@@ -142,8 +154,14 @@ const createEmptyDetailsData = (date: string): DetailsData => {
 }
 
 // 渲染国家维度饼图
-const renderCountryChart = () => {
-  if (!countryChartRef.value) return
+const renderCountryChart = async () => {
+  // 确保DOM元素已加载
+  await nextTick()
+  
+  if (!countryChartRef.value) {
+    console.warn('Country chart DOM element not found')
+    return
+  }
   
   if (!countryChart) {
     countryChart = echarts.init(countryChartRef.value)
@@ -197,8 +215,14 @@ const renderCountryChart = () => {
 }
 
 // 渲染设备维度饼图
-const renderDeviceChart = () => {
-  if (!deviceChartRef.value) return
+const renderDeviceChart = async () => {
+  // 确保DOM元素已加载
+  await nextTick()
+  
+  if (!deviceChartRef.value) {
+    console.warn('Device chart DOM element not found')
+    return
+  }
   
   if (!deviceChart) {
     deviceChart = echarts.init(deviceChartRef.value)
@@ -252,8 +276,14 @@ const renderDeviceChart = () => {
 }
 
 // 渲染时间线图表
-const renderTimelineChart = () => {
-  if (!timelineChartRef.value) return
+const renderTimelineChart = async () => {
+  // 确保DOM元素已加载
+  await nextTick()
+  
+  if (!timelineChartRef.value) {
+    console.warn('Timeline chart DOM element not found')
+    return
+  }
   
   if (!timelineChart) {
     timelineChart = echarts.init(timelineChartRef.value)
@@ -341,8 +371,29 @@ const renderTimelineChart = () => {
 
 // 日期范围变化处理
 const handleDateRangeChange = (range: [Date, Date]) => {
+  if (!range || range.length !== 2) return
+  
   dateRange.value = range
-  // 可以根据日期范围重新加载数据
+  
+  // 根据选定的日期范围重新加载数据
+  const startDate = formatDate(range[0])
+  const endDate = formatDate(range[1])
+  
+  // 重新加载各种数据
+  loadCountryData()
+  loadDeviceData()
+  loadTimelineData()
+  
+  // 加载最新日期的详情数据
+  loadDetailsData(endDate)
+}
+
+// 格式化日期为YYYY-MM-DD
+const formatDate = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 // 格式化数字
@@ -358,8 +409,15 @@ const formatCurrency = (amount: number) => {
 // 当前日期
 const currentDate = computed(() => {
   const today = new Date()
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  return formatDate(today)
 })
+
+// 监听窗口大小变化，重新调整图表大小
+const handleResize = () => {
+  if (countryChart) countryChart.resize()
+  if (deviceChart) deviceChart.resize()
+  if (timelineChart) timelineChart.resize()
+}
 
 // 初始加载
 onMounted(() => {
@@ -371,12 +429,38 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
 })
 
-// 组件卸载时清理
-const handleResize = () => {
-  countryChart?.resize()
-  deviceChart?.resize()
-  timelineChart?.resize()
-}
+// 观察数据变化，重新渲染图表
+watch(() => countryData.value, () => {
+  nextTick(() => renderCountryChart())
+}, { deep: true })
+
+watch(() => deviceData.value, () => {
+  nextTick(() => renderDeviceChart())
+}, { deep: true })
+
+watch(() => timelineData.value, () => {
+  nextTick(() => renderTimelineChart())
+}, { deep: true })
+
+// 组件卸载时清理资源
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  
+  if (countryChart) {
+    countryChart.dispose()
+    countryChart = null
+  }
+  
+  if (deviceChart) {
+    deviceChart.dispose()
+    deviceChart = null
+  }
+  
+  if (timelineChart) {
+    timelineChart.dispose()
+    timelineChart = null
+  }
+})
 </script>
 
 <template>
@@ -489,41 +573,61 @@ const handleResize = () => {
       <div class="details-section">
         <div class="section-header">
           <h2>详细数据</h2>
-          <el-date-picker
-            v-model="dateRange"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            format="YYYY-MM-DD"
-            @change="handleDateRangeChange"
-          />
+          <div class="details-date" v-if="detailsData">
+            <span class="date-label">日期:</span> 
+            <span class="date-value">{{ detailsData.date }}</span>
+          </div>
         </div>
         
-        <el-table
-          :data="timelineData"
-          stripe
-          border
-          v-loading="loadingDetails"
-          style="width: 100%"
-        >
-          <el-table-column prop="date" label="日期" width="120" />
-          <el-table-column prop="user_count" label="用户数" width="120">
-            <template #default="scope">
-              {{ formatNumber(scope.row.user_count) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="event_count" label="事件数" width="120">
-            <template #default="scope">
-              {{ formatNumber(scope.row.event_count) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="revenue" label="收入" width="150">
-            <template #default="scope">
-              {{ formatCurrency(scope.row.revenue) }}
-            </template>
-          </el-table-column>
-        </el-table>
+        <el-descriptions v-if="detailsData" title="日期概览" :column="4" border>
+          <el-descriptions-item label="总收入">
+            {{ formatCurrency(detailsData.total_revenue) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="国家数量">
+            {{ detailsData.countries.length }}
+          </el-descriptions-item>
+          <el-descriptions-item label="设备类型数量">
+            {{ detailsData.devices.length }}
+          </el-descriptions-item>
+        </el-descriptions>
+        
+        <div class="details-tables" v-if="detailsData">
+          <div class="details-countries">
+            <h3>国家分布</h3>
+            <el-table
+              :data="detailsData.countries"
+              stripe
+              border
+              v-loading="loadingDetails"
+              style="width: 100%"
+            >
+              <el-table-column prop="country" label="国家" width="120" />
+              <el-table-column prop="users" label="用户数" width="120">
+                <template #default="scope">
+                  {{ formatNumber(scope.row.users) }}
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          
+          <div class="details-devices">
+            <h3>设备分布</h3>
+            <el-table
+              :data="detailsData.devices"
+              stripe
+              border
+              v-loading="loadingDetails"
+              style="width: 100%"
+            >
+              <el-table-column prop="device" label="设备" width="120" />
+              <el-table-column prop="users" label="用户数" width="120">
+                <template #default="scope">
+                  {{ formatNumber(scope.row.users) }}
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
       </div>
     </div>
   </AppLayout>
@@ -576,6 +680,7 @@ const handleResize = () => {
 .data-chart {
   height: 300px;
   width: 100%;
+  margin-top: 20px;
 }
 
 .timeline-section {
@@ -589,6 +694,7 @@ const handleResize = () => {
 .timeline-chart {
   height: 400px;
   width: 100%;
+  margin-top: 20px;
 }
 
 .details-section {
@@ -596,6 +702,39 @@ const handleResize = () => {
   border-radius: 4px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   padding: 20px;
+}
+
+.details-date {
+  display: flex;
+  align-items: center;
+}
+
+.date-label {
+  margin-right: 5px;
+  font-weight: 500;
+}
+
+.date-value {
+  font-weight: bold;
+}
+
+.details-tables {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.details-countries,
+.details-devices {
+  flex: 1;
+  min-width: 280px;
+}
+
+.details-tables h3 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  font-weight: 500;
 }
 
 @media (max-width: 1200px) {

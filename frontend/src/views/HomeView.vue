@@ -16,19 +16,58 @@ const overviewData = reactive<OverviewData>({
   total_revenue: 0
 })
 
+// 指标趋势数据（实际应用中应从API获取）
+const trends = reactive({
+  user_count: { 
+    day_on_day: 0, // 日环比
+    week_on_week: 0 // 周环比
+  },
+  event_count: {
+    day_on_day: 0, 
+    week_on_week: 0
+  },
+  device_count: {
+    day_on_day: 0,
+    week_on_week: 0
+  },
+  total_revenue: {
+    day_on_day: 0,
+    week_on_week: 0
+  }
+})
+
 // 时间线数据
 const timelineData = ref<TimelineItem[]>([])
 const loading = ref(false)
+const loadingOverview = ref(false)
 const days = ref(30)
 
-// 加载概览数据
-const loadOverviewData = async () => {
+// 格式化日期为YYYY-MM-DD
+const formatDate = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// 加载概览数据，根据选定日期
+const loadOverviewData = async (date: string = formatDate(selectedDate.value)) => {
+  loadingOverview.value = true
   try {
     const response = await getOverview()
     if (response && response.status === 'success') {
       Object.assign(overviewData, response.data)
+      
+      // 临时: 随机生成-5%到+5%之间的趋势数据
+      // 实际项目中这些数据应该从API获取
+      Object.keys(trends).forEach(key => {
+        trends[key as keyof typeof trends].day_on_day = parseFloat((Math.random() * 10 - 5).toFixed(1))
+        trends[key as keyof typeof trends].week_on_week = parseFloat((Math.random() * 10 - 5).toFixed(1))
+      })
+    } else if (response) {
+      ElMessage.warning(response.message || '获取概览数据格式不正确')
     } else {
-      ElMessage.warning(response?.message || '获取概览数据格式不正确')
+      // API已经在内部处理了错误，这里不需要再显示消息
     }
   } catch (error) {
     console.error('获取概览数据出错', error)
@@ -40,6 +79,8 @@ const loadOverviewData = async () => {
       device_count: 0,
       total_revenue: 0
     })
+  } finally {
+    loadingOverview.value = false
   }
 }
 
@@ -50,8 +91,11 @@ const loadTimelineData = async () => {
     const response = await getTimeline(days.value)
     if (response && response.status === 'success') {
       timelineData.value = response.data.items || []
+    } else if (response) {
+      ElMessage.warning(response.message || '获取时间线数据格式不正确')
+      timelineData.value = []
     } else {
-      ElMessage.warning(response?.message || '获取时间线数据格式不正确')
+      // API已经在内部处理了错误，这里不需要再显示消息
       timelineData.value = []
     }
   } catch (error) {
@@ -73,10 +117,20 @@ const formatCurrency = (amount: number) => {
   return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+// 格式化百分比
+const formatPercentage = (value: number) => {
+  const prefix = value >= 0 ? '+' : ''
+  return `${prefix}${value}%`
+}
+
 // 日期变化处理
 const handleDateChange = (date: Date) => {
   selectedDate.value = date
-  // 这里可以添加根据日期重新加载数据的逻辑
+  const formattedDate = formatDate(date)
+  
+  // 重新加载该日期的数据
+  loadOverviewData(formattedDate)
+  // 如果需要根据选择的日期重新加载时间线数据，也可以在这里触发
 }
 
 // 初始加载数据
@@ -103,51 +157,67 @@ onMounted(() => {
       
       <!-- 指标卡片 -->
       <div class="metric-cards">
-        <el-card class="metric-card">
+        <el-card class="metric-card" v-loading="loadingOverview">
           <div class="metric-title">用户数</div>
-          <div class="metric-date">{{ selectedDate.toISOString().split('T')[0] }}</div>
+          <div class="metric-date">{{ formatDate(selectedDate) }}</div>
           <div class="metric-value">{{ formatNumber(overviewData.user_count) }}</div>
           <div class="metric-trend">
-            <span class="trend-label">较前比</span>
-            <span class="trend-value up">↑ 1%</span>
-            <span class="trend-label">环比</span>
-            <span class="trend-value up">↑ 1%</span>
+            <span class="trend-label">较同比</span>
+            <span class="trend-value" :class="trends.user_count.day_on_day >= 0 ? 'up' : 'down'">
+              {{ formatPercentage(trends.user_count.day_on_day) }}
+            </span>
+            <span class="trend-label">较环比</span>
+            <span class="trend-value" :class="trends.user_count.week_on_week >= 0 ? 'up' : 'down'">
+              {{ formatPercentage(trends.user_count.week_on_week) }}
+            </span>
           </div>
         </el-card>
         
-        <el-card class="metric-card">
+        <el-card class="metric-card" v-loading="loadingOverview">
           <div class="metric-title">事件数</div>
-          <div class="metric-date">{{ selectedDate.toISOString().split('T')[0] }}</div>
+          <div class="metric-date">{{ formatDate(selectedDate) }}</div>
           <div class="metric-value">{{ formatNumber(overviewData.event_count) }}</div>
           <div class="metric-trend">
-            <span class="trend-label">较前比</span>
-            <span class="trend-value up">↑ 1%</span>
-            <span class="trend-label">环比</span>
-            <span class="trend-value up">↑ 1%</span>
+            <span class="trend-label">较同比</span>
+            <span class="trend-value" :class="trends.event_count.day_on_day >= 0 ? 'up' : 'down'">
+              {{ formatPercentage(trends.event_count.day_on_day) }}
+            </span>
+            <span class="trend-label">较环比</span>
+            <span class="trend-value" :class="trends.event_count.week_on_week >= 0 ? 'up' : 'down'">
+              {{ formatPercentage(trends.event_count.week_on_week) }}
+            </span>
           </div>
         </el-card>
         
-        <el-card class="metric-card">
+        <el-card class="metric-card" v-loading="loadingOverview">
           <div class="metric-title">设备数</div>
-          <div class="metric-date">{{ selectedDate.toISOString().split('T')[0] }}</div>
+          <div class="metric-date">{{ formatDate(selectedDate) }}</div>
           <div class="metric-value">{{ formatNumber(overviewData.device_count) }}</div>
           <div class="metric-trend">
-            <span class="trend-label">较前比</span>
-            <span class="trend-value up">↑ 1%</span>
-            <span class="trend-label">环比</span>
-            <span class="trend-value up">↑ 1%</span>
+            <span class="trend-label">较同比</span>
+            <span class="trend-value" :class="trends.device_count.day_on_day >= 0 ? 'up' : 'down'">
+              {{ formatPercentage(trends.device_count.day_on_day) }}
+            </span>
+            <span class="trend-label">较环比</span>
+            <span class="trend-value" :class="trends.device_count.week_on_week >= 0 ? 'up' : 'down'">
+              {{ formatPercentage(trends.device_count.week_on_week) }}
+            </span>
           </div>
         </el-card>
         
-        <el-card class="metric-card">
+        <el-card class="metric-card" v-loading="loadingOverview">
           <div class="metric-title">总收入</div>
-          <div class="metric-date">{{ selectedDate.toISOString().split('T')[0] }}</div>
+          <div class="metric-date">{{ formatDate(selectedDate) }}</div>
           <div class="metric-value">{{ formatCurrency(overviewData.total_revenue) }}</div>
           <div class="metric-trend">
-            <span class="trend-label">较前比</span>
-            <span class="trend-value up">↑ 1%</span>
-            <span class="trend-label">环比</span>
-            <span class="trend-value up">↑ 1%</span>
+            <span class="trend-label">较同比</span>
+            <span class="trend-value" :class="trends.total_revenue.day_on_day >= 0 ? 'up' : 'down'">
+              {{ formatPercentage(trends.total_revenue.day_on_day) }}
+            </span>
+            <span class="trend-label">较环比</span>
+            <span class="trend-value" :class="trends.total_revenue.week_on_week >= 0 ? 'up' : 'down'">
+              {{ formatPercentage(trends.total_revenue.week_on_week) }}
+            </span>
           </div>
         </el-card>
       </div>
