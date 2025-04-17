@@ -246,10 +246,10 @@ export const getOverview = async (loadingState?: { value: boolean }): Promise<Ap
 
 /**
  * 获取时间线数据
- * @param days 天数，默认7天
+ * @param days 天数，默认30天
  * @param loadingState 可选的加载状态ref
  */
-export const getTimeline = async (days: number = 7, loadingState?: { value: boolean }): Promise<ApiResponse<ListResponse<TimelineItem>> | null> => {
+export const getTimeline = async (days: number = 30, loadingState?: { value: boolean }): Promise<ApiResponse<ListResponse<TimelineItem>> | null> => {
   if (loadingState) loadingState.value = true;
   
   return safeApiCall(
