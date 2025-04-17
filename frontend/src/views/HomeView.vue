@@ -34,7 +34,7 @@ echarts.use([
 
 // 日期选择
 const selectedDate = ref(new Date())
-const timeRange = ref('week')
+const timeRange = ref('week') // 默认时间范围为周
 
 // 概览数据
 const overviewData = reactive<OverviewData>({
@@ -84,7 +84,7 @@ let usersChart: echarts.ECharts | null = null
 const timelineData = ref<TimelineItem[]>([])
 const loading = ref(false)
 const loadingOverview = ref(false)
-const days = ref(30)
+const days = ref(7) // 默认显示最近7天
 
 // 统计卡片为两行
 const statCards = computed(() => [

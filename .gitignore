@@ -21,9 +21,6 @@ frontend/node_modules/
 frontend/.pnp
 frontend/.pnp.js
 
-# 测试覆盖率报告
-frontend/coverage/
-
 # 生产环境构建文件
 frontend/build/
 
