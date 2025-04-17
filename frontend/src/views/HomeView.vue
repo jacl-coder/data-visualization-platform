@@ -84,7 +84,7 @@ let usersChart: echarts.ECharts | null = null
 const timelineData = ref<TimelineItem[]>([])
 const loading = ref(false)
 const loadingOverview = ref(false)
-const days = ref(30)
+const days = ref(7)
 
 // 统计卡片为两行
 const statCards = computed(() => [
@@ -813,6 +813,11 @@ const onUnmounted = () => {
           <el-table-column prop="event_count" label="事件数" min-width="100">
             <template #default="scope">
               {{ formatNumber(scope.row.event_count) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="设备数" min-width="100">
+            <template #default="scope">
+              {{ formatNumber(overviewData.device_count) }}
             </template>
           </el-table-column>
           <el-table-column prop="revenue" label="收入" min-width="120">
