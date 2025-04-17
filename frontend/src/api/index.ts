@@ -227,8 +227,11 @@ export const getServerStatus = async (): Promise<ApiResponse<string> | null> => 
 
 /**
  * 获取概览数据
+ * @param loadingState 可选的加载状态ref
  */
-export const getOverview = async (): Promise<ApiResponse<OverviewData> | null> => {
+export const getOverview = async (loadingState?: { value: boolean }): Promise<ApiResponse<OverviewData> | null> => {
+  if (loadingState) loadingState.value = true;
+  
   return safeApiCall(
     async () => {
       const response = await apiClient.get<ApiResponse<OverviewData>>('/api/overview')
@@ -236,7 +239,7 @@ export const getOverview = async (): Promise<ApiResponse<OverviewData> | null> =
     },
     'overview',
     30000, // 30秒缓存
-    undefined,
+    loadingState,
     '获取概览数据失败'
   )
 }
@@ -244,8 +247,11 @@ export const getOverview = async (): Promise<ApiResponse<OverviewData> | null> =
 /**
  * 获取时间线数据
  * @param days 天数，默认30天
+ * @param loadingState 可选的加载状态ref
  */
-export const getTimeline = async (days: number = 30): Promise<ApiResponse<ListResponse<TimelineItem>> | null> => {
+export const getTimeline = async (days: number = 30, loadingState?: { value: boolean }): Promise<ApiResponse<ListResponse<TimelineItem>> | null> => {
+  if (loadingState) loadingState.value = true;
+  
   return safeApiCall(
     async () => {
       const response = await apiClient.get<ApiResponse<ListResponse<TimelineItem>>>(`/api/timeline?days=${days}`)
@@ -253,15 +259,18 @@ export const getTimeline = async (days: number = 30): Promise<ApiResponse<ListRe
     },
     ApiCache.generateKey('/api/timeline', { days }),
     60000, // 1分钟缓存
-    undefined,
+    loadingState,
     '获取时间线数据失败'
   )
 }
 
 /**
  * 获取国家维度数据
+ * @param loadingState 可选的加载状态ref
  */
-export const getCountryData = async (): Promise<ApiResponse<ListResponse<CountryItem>> | null> => {
+export const getCountryData = async (loadingState?: { value: boolean }): Promise<ApiResponse<ListResponse<CountryItem>> | null> => {
+  if (loadingState) loadingState.value = true;
+  
   return safeApiCall(
     async () => {
       const response = await apiClient.get<ApiResponse<ListResponse<CountryItem>>>('/api/country')
@@ -269,15 +278,18 @@ export const getCountryData = async (): Promise<ApiResponse<ListResponse<Country
     },
     'country_data',
     300000, // 5分钟缓存
-    undefined,
+    loadingState,
     '获取国家数据失败'
   )
 }
 
 /**
  * 获取设备维度数据
+ * @param loadingState 可选的加载状态ref
  */
-export const getDeviceData = async (): Promise<ApiResponse<ListResponse<DeviceItem>> | null> => {
+export const getDeviceData = async (loadingState?: { value: boolean }): Promise<ApiResponse<ListResponse<DeviceItem>> | null> => {
+  if (loadingState) loadingState.value = true;
+  
   return safeApiCall(
     async () => {
       const response = await apiClient.get<ApiResponse<ListResponse<DeviceItem>>>('/api/device')
@@ -285,7 +297,7 @@ export const getDeviceData = async (): Promise<ApiResponse<ListResponse<DeviceIt
     },
     'device_data',
     300000, // 5分钟缓存
-    undefined,
+    loadingState,
     '获取设备数据失败'
   )
 }
@@ -293,8 +305,11 @@ export const getDeviceData = async (): Promise<ApiResponse<ListResponse<DeviceIt
 /**
  * 获取指定日期的详细数据
  * @param date 日期，格式为YYYY-MM-DD
+ * @param loadingState 可选的加载状态ref
  */
-export const getDetailsData = async (date: string): Promise<ApiResponse<DetailsData> | null> => {
+export const getDetailsData = async (date: string, loadingState?: { value: boolean }): Promise<ApiResponse<DetailsData> | null> => {
+  if (loadingState) loadingState.value = true;
+  
   return safeApiCall(
     async () => {
       const response = await apiClient.get<ApiResponse<DetailsData>>(`/api/details?date=${date}`)
@@ -302,7 +317,7 @@ export const getDetailsData = async (date: string): Promise<ApiResponse<DetailsD
     },
     ApiCache.generateKey('/api/details', { date }),
     300000, // 5分钟缓存
-    undefined,
+    loadingState,
     '获取详情数据失败'
   )
 }

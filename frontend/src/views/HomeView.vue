@@ -2,7 +2,7 @@
 import { ref, onMounted, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import AppLayout from '../components/AppLayout.vue'
-import { getOverview, getTimeline } from '../api'
+import { getOverview, getTimeline, getDeviceData } from '../api'
 import type { OverviewData, TimelineItem } from '../api'
 import * as echarts from 'echarts/core'
 import { LineChart, PieChart } from 'echarts/charts'
@@ -138,11 +138,52 @@ const loadOverviewData = async (date: string = formatDate(selectedDate.value)) =
     if (response && response.status === 'success') {
       Object.assign(overviewData, response.data)
       
-      // 临时: 随机生成-5%到+5%之间的趋势数据
-      Object.keys(trends).forEach(key => {
-        trends[key as keyof typeof trends].day_on_day = parseFloat((Math.random() * 10 - 5).toFixed(1))
-        trends[key as keyof typeof trends].week_on_week = parseFloat((Math.random() * 10 - 5).toFixed(1))
+      // 计算实际趋势数据，使用时间序列数据计算同比和环比
+      // 注意：同比是与去年同期比较，环比是与上个月比较
+      
+      // 获取当前数据、上月数据和去年同期数据
+      const currentData = timelineData.value[0] || { user_count: 0, event_count: 0, revenue: 0 }
+      
+      // 查找上个月同一天的数据（约30天前）
+      const lastMonthIndex = timelineData.value.findIndex(item => {
+        const itemDate = new Date(item.date)
+        const currentDate = new Date(currentData.date)
+        const dayDiff = Math.floor((currentDate.getTime() - itemDate.getTime()) / (1000 * 60 * 60 * 24))
+        return dayDiff >= 28 && dayDiff <= 31 // 大约一个月的时间差
       })
+      
+      // 查找去年同期的数据（约365天前）
+      const lastYearIndex = timelineData.value.findIndex(item => {
+        const itemDate = new Date(item.date)
+        const currentDate = new Date(currentData.date)
+        const dayDiff = Math.floor((currentDate.getTime() - itemDate.getTime()) / (1000 * 60 * 60 * 24))
+        return dayDiff >= 360 && dayDiff <= 370 // 大约一年的时间差
+      })
+      
+      const lastMonthData = lastMonthIndex !== -1 ? timelineData.value[lastMonthIndex] : { user_count: 0, event_count: 0, revenue: 0 }
+      const lastYearData = lastYearIndex !== -1 ? timelineData.value[lastYearIndex] : { user_count: 0, event_count: 0, revenue: 0 }
+      
+      // 计算同比（与去年同期比较）
+      if (lastYearData.user_count > 0) {
+        trends.user_count.day_on_day = parseFloat(((currentData.user_count - lastYearData.user_count) / lastYearData.user_count * 100).toFixed(1))
+      }
+      if (lastYearData.event_count > 0) {
+        trends.event_count.day_on_day = parseFloat(((currentData.event_count - lastYearData.event_count) / lastYearData.event_count * 100).toFixed(1))
+      }
+      if (lastYearData.revenue > 0) {
+        trends.total_revenue.day_on_day = parseFloat(((currentData.revenue - lastYearData.revenue) / lastYearData.revenue * 100).toFixed(1))
+      }
+      
+      // 计算环比（与上个月比较）
+      if (lastMonthData.user_count > 0) {
+        trends.user_count.week_on_week = parseFloat(((currentData.user_count - lastMonthData.user_count) / lastMonthData.user_count * 100).toFixed(1))
+      }
+      if (lastMonthData.event_count > 0) {
+        trends.event_count.week_on_week = parseFloat(((currentData.event_count - lastMonthData.event_count) / lastMonthData.event_count * 100).toFixed(1))
+      }
+      if (lastMonthData.revenue > 0) {
+        trends.total_revenue.week_on_week = parseFloat(((currentData.revenue - lastMonthData.revenue) / lastMonthData.revenue * 100).toFixed(1))
+      }
 
       // 在数据加载后初始化图表
       initCharts()
@@ -220,79 +261,12 @@ const initCharts = () => {
     
     if (revenueChartRef.value) {
       revenueChart = echarts.init(revenueChartRef.value, null, { renderer: 'canvas' })
-      
-      // 模拟收入数据
-      const revenueOption = {
-        title: {
-          text: '收入趋势',
-          left: 'center'
-        },
-        tooltip: {
-          trigger: 'axis'
-        },
-        xAxis: {
-          type: 'category',
-          data: ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-        },
-        yAxis: {
-          type: 'value'
-        },
-        series: [{
-          data: [820, 932, 901, 934, 1290, 1330, 1320],
-          type: 'line',
-          smooth: true,
-          areaStyle: {
-            opacity: 0.3
-          },
-          itemStyle: {
-            color: '#27ae60'
-          }
-        }]
-      }
-      
-      revenueChart.setOption(revenueOption)
+      updateRevenueChart()
     }
     
     if (usersChartRef.value) {
       usersChart = echarts.init(usersChartRef.value, null, { renderer: 'canvas' })
-      
-      // 模拟用户设备分布
-      const usersOption = {
-        title: {
-          text: '用户设备分布',
-          left: 'center'
-        },
-        tooltip: {
-          trigger: 'item'
-        },
-        legend: {
-          orient: 'vertical',
-          left: 'left'
-        },
-        series: [
-          {
-            name: '设备分布',
-            type: 'pie',
-            radius: '50%',
-            data: [
-              { value: 1048, name: 'Mobile' },
-              { value: 735, name: 'Tablet' },
-              { value: 580, name: 'Desktop' },
-              { value: 484, name: 'Smart TV' },
-              { value: 300, name: 'Others' }
-            ],
-            emphasis: {
-              itemStyle: {
-                shadowBlur: 10,
-                shadowOffsetX: 0,
-                shadowColor: 'rgba(0, 0, 0, 0.5)'
-              }
-            }
-          }
-        ]
-      }
-      
-      usersChart.setOption(usersOption)
+      updateDeviceChart()
     }
   }, 100) // 延长时间以确保DOM已经完全渲染
 }
@@ -424,6 +398,153 @@ const updateTimelineChart = () => {
   lineChart.setOption(option)
 }
 
+// 更新收入趋势图
+const updateRevenueChart = () => {
+  if (!revenueChart || timelineData.value.length === 0) return
+  
+  // 提取最近7天的数据
+  const recentData = [...timelineData.value].slice(0, 7).reverse()
+  const dates = recentData.map(item => item.date)
+  const revenues = recentData.map(item => item.revenue)
+  
+  const revenueOption = {
+    title: {
+      text: '近7天收入趋势',
+      left: 'center'
+    },
+    tooltip: {
+      trigger: 'axis',
+      formatter: function(params: any) {
+        const date = params[0].axisValue
+        return `${date}: $${params[0].value.toFixed(2)}`
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: dates
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        formatter: '${value}'
+      }
+    },
+    series: [{
+      data: revenues,
+      type: 'line',
+      smooth: true,
+      areaStyle: {
+        opacity: 0.3
+      },
+      itemStyle: {
+        color: '#27ae60'
+      }
+    }]
+  }
+  
+  revenueChart.setOption(revenueOption)
+}
+
+// 更新设备分布图
+const updateDeviceChart = async () => {
+  if (!usersChart) return
+  
+  // 加载设备数据
+  try {
+    const response = await getDeviceData()
+    if (response && response.status === 'success') {
+      const deviceData = response.data.items || []
+      
+      // 准备饼图数据
+      const pieData = deviceData.map(item => ({
+        name: item.device,
+        value: item.users
+      }))
+      
+      const usersOption = {
+        title: {
+          text: '用户设备分布',
+          left: 'center'
+        },
+        tooltip: {
+          trigger: 'item',
+          formatter: '{a} <br/>{b}: {c} ({d}%)'
+        },
+        legend: {
+          orient: 'vertical',
+          left: 'left',
+          type: 'scroll',
+          pageIconSize: 12,
+          pageTextStyle: {
+            color: '#888'
+          }
+        },
+        series: [
+          {
+            name: '设备分布',
+            type: 'pie',
+            radius: '50%',
+            data: pieData,
+            emphasis: {
+              itemStyle: {
+                shadowBlur: 10,
+                shadowOffsetX: 0,
+                shadowColor: 'rgba(0, 0, 0, 0.5)'
+              }
+            },
+            label: {
+              formatter: '{b}: {d}%'
+            }
+          }
+        ]
+      }
+      
+      usersChart.setOption(usersOption)
+    }
+  } catch (error) {
+    console.error('获取设备数据失败', error)
+    ElMessage.error('获取设备数据失败，将显示默认值')
+    
+    // 使用默认数据
+    const defaultOption = {
+      title: {
+        text: '用户设备分布',
+        left: 'center'
+      },
+      tooltip: {
+        trigger: 'item'
+      },
+      legend: {
+        orient: 'vertical',
+        left: 'left'
+      },
+      series: [
+        {
+          name: '设备分布',
+          type: 'pie',
+          radius: '50%',
+          data: [
+            { value: 1048, name: 'Mobile' },
+            { value: 735, name: 'Tablet' },
+            { value: 580, name: 'Desktop' },
+            { value: 484, name: 'Smart TV' },
+            { value: 300, name: 'Others' }
+          ],
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+          }
+        }
+      ]
+    }
+    
+    usersChart.setOption(defaultOption)
+  }
+}
+
 // 时间范围变化
 const handleTimeRangeChange = () => {
   switch (timeRange.value) {
@@ -437,7 +558,10 @@ const handleTimeRangeChange = () => {
       days.value = 90
       break
   }
-  loadTimelineData()
+  loadTimelineData().then(() => {
+    // 更新收入趋势图
+    updateRevenueChart()
+  })
 }
 
 // 窗口大小变化时重新绘制图表
@@ -449,8 +573,10 @@ const handleResize = () => {
 
 // 初始加载数据
 onMounted(() => {
-  loadOverviewData()
-  loadTimelineData()
+  // 先加载时间线数据，再加载概览数据
+  loadTimelineData().then(() => {
+    loadOverviewData()
+  })
   window.addEventListener('resize', handleResize)
 })
 
@@ -485,9 +611,9 @@ const onUnmounted = () => {
           />
           
           <el-radio-group v-model="timeRange" class="time-range-selector" @change="handleTimeRangeChange">
-            <el-radio-button label="week">周</el-radio-button>
-            <el-radio-button label="month">月</el-radio-button>
-            <el-radio-button label="quarter">季度</el-radio-button>
+            <el-radio-button value="week">周</el-radio-button>
+            <el-radio-button value="month">月</el-radio-button>
+            <el-radio-button value="quarter">季度</el-radio-button>
           </el-radio-group>
         </div>
       </div>

@@ -11,8 +11,9 @@ import {
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import AppLayout from '../components/AppLayout.vue'
-import { getCountryData, getDeviceData, getTimeline, getDetailsData } from '../api'
+import { getCountryData, getDeviceData, getTimeline, getDetailsData, clearApiCache } from '../api'
 import type { CountryItem, DeviceItem, TimelineItem, DetailsData } from '../api'
+import { RefreshRight } from '@element-plus/icons-vue'
 
 // 注册ECharts组件
 echarts.use([
@@ -48,11 +49,52 @@ let countryChart: echarts.ECharts | null = null
 let deviceChart: echarts.ECharts | null = null
 let timelineChart: echarts.ECharts | null = null
 
+// 格式化日期为YYYY-MM-DD
+const formatDate = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// 选中的日期
+const selectedDate = ref(formatDate(new Date()))
+
+// 日期范围快捷选项
+const dateRangeShortcuts = [
+  {
+    text: '最近一周',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24 * 7)
+      return [start, end]
+    }
+  },
+  {
+    text: '最近一个月',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24 * 30)
+      return [start, end]
+    }
+  },
+  {
+    text: '最近三个月',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24 * 90)
+      return [start, end]
+    }
+  }
+]
+
 // 加载国家数据
 const loadCountryData = async () => {
-  loadingCountry.value = true
   try {
-    const response = await getCountryData()
+    const response = await getCountryData(loadingCountry)
     if (response && response.status === 'success') {
       countryData.value = response.data.items || []
       renderCountryChart()
@@ -67,16 +109,13 @@ const loadCountryData = async () => {
     console.error('获取国家数据出错', error)
     ElMessage.error('获取国家数据出错，将显示空列表')
     countryData.value = []
-  } finally {
-    loadingCountry.value = false
   }
 }
 
 // 加载设备数据
 const loadDeviceData = async () => {
-  loadingDevice.value = true
   try {
-    const response = await getDeviceData()
+    const response = await getDeviceData(loadingDevice)
     if (response && response.status === 'success') {
       deviceData.value = response.data.items || []
       renderDeviceChart()
@@ -91,16 +130,20 @@ const loadDeviceData = async () => {
     console.error('获取设备数据出错', error)
     ElMessage.error('获取设备数据出错，将显示空列表')
     deviceData.value = []
-  } finally {
-    loadingDevice.value = false
   }
 }
 
 // 加载时间线数据
 const loadTimelineData = async () => {
-  loadingTimeline.value = true
   try {
-    const response = await getTimeline(30)
+    // 计算日期范围内的天数
+    const start = new Date(dateRange.value[0])
+    const end = new Date(dateRange.value[1])
+    const diffTime = Math.abs(end.getTime() - start.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 *
+    24)) + 1 // 包含开始和结束日期
+    
+    const response = await getTimeline(diffDays, loadingTimeline)
     if (response && response.status === 'success') {
       timelineData.value = response.data.items || []
       renderTimelineChart()
@@ -115,16 +158,13 @@ const loadTimelineData = async () => {
     console.error('获取时间线数据出错', error)
     ElMessage.error('获取时间线数据出错，将显示空列表')
     timelineData.value = []
-  } finally {
-    loadingTimeline.value = false
   }
 }
 
 // 加载详情数据
 const loadDetailsData = async (date: string) => {
-  loadingDetails.value = true
   try {
-    const response = await getDetailsData(date)
+    const response = await getDetailsData(date, loadingDetails)
     if (response && response.status === 'success') {
       detailsData.value = response.data
     } else if (response) {
@@ -138,8 +178,6 @@ const loadDetailsData = async (date: string) => {
     console.error('获取详情数据出错', error)
     ElMessage.error('获取详情数据出错，将显示默认值')
     detailsData.value = createEmptyDetailsData(date)
-  } finally {
-    loadingDetails.value = false
   }
 }
 
@@ -167,24 +205,58 @@ const renderCountryChart = async () => {
     countryChart = echarts.init(countryChartRef.value)
   }
 
-  const data = countryData.value.map(item => ({
+  // 提取前10个国家数据，其余归为"其他"类别
+  const topData = countryData.value.slice(0, 8)
+  let otherUsers = 0
+  let otherRevenue = 0
+  
+  if (countryData.value.length > 8) {
+    countryData.value.slice(8).forEach(item => {
+      otherUsers += item.users
+      otherRevenue += item.revenue
+    })
+    
+    // 添加"其他"类别
+    if (otherUsers > 0) {
+      topData.push({
+        country: '其他',
+        users: otherUsers,
+        revenue: otherRevenue
+      })
+    }
+  }
+
+  // 准备饼图数据
+  const data = topData.map(item => ({
     name: item.country,
-    value: item.users
+    value: item.users,
+    revenue: item.revenue
   }))
   
   const option = {
     title: {
       text: '国家用户占比',
-      left: 'center'
+      left: 'center',
+      top: 0,
+      textStyle: {
+        fontSize: 16,
+        fontWeight: 'normal'
+      }
     },
     tooltip: {
       trigger: 'item',
-      formatter: '{a} <br/>{b}: {c} ({d}%)'
+      formatter: (params: any) => {
+        const item = params.data
+        return `${params.name}<br/>
+                用户数: ${formatNumber(item.value)} (${params.percent}%)<br/>
+                收入: ${formatCurrency(item.revenue)}`
+      }
     },
     legend: {
-      orient: 'vertical',
-      left: 'left',
       type: 'scroll',
+      orient: 'vertical',
+      right: 10,
+      top: 'center',
       pageIconSize: 12,
       pageTextStyle: {
         color: '#888'
@@ -194,24 +266,48 @@ const renderCountryChart = async () => {
       {
         name: '国家分布',
         type: 'pie',
-        radius: '60%',
-        center: ['50%', '60%'],
-        data: data.length > 0 ? data : [{ name: '无数据', value: 1 }],
+        radius: ['40%', '70%'], // 使用环形饼图
+        center: ['40%', '50%'],
+        avoidLabelOverlap: true,
+        itemStyle: {
+          borderRadius: 6,
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        label: {
+          show: false,
+          position: 'center',
+          formatter: '{b}: {d}%'
+        },
         emphasis: {
+          label: {
+            show: true,
+            fontSize: 14,
+            fontWeight: 'bold'
+          },
           itemStyle: {
             shadowBlur: 10,
             shadowOffsetX: 0,
             shadowColor: 'rgba(0, 0, 0, 0.5)'
           }
         },
-        label: {
-          formatter: '{b}: {d}%'
-        }
+        labelLine: {
+          show: false
+        },
+        data: data.length > 0 ? data : [{ name: '无数据', value: 1 }]
       }
     ]
   }
   
   countryChart.setOption(option)
+  
+  // 添加点击事件
+  countryChart.off('click')
+  countryChart.on('click', (params: any) => {
+    if (params.name !== '无数据' && params.name !== '其他') {
+      ElMessage.info(`点击了 ${params.name}，可以在此添加详细数据查看功能`)
+    }
+  })
 }
 
 // 渲染设备维度饼图
@@ -228,51 +324,109 @@ const renderDeviceChart = async () => {
     deviceChart = echarts.init(deviceChartRef.value)
   }
 
-  const data = deviceData.value.map(item => ({
+  // 对设备数据进行处理，确保不会显示太多类别
+  const topData = deviceData.value.slice(0, 6)
+  let otherUsers = 0
+  let otherRevenue = 0
+  
+  if (deviceData.value.length > 6) {
+    deviceData.value.slice(6).forEach(item => {
+      otherUsers += item.users
+      otherRevenue += item.revenue
+    })
+    
+    // 添加"其他"类别
+    if (otherUsers > 0) {
+      topData.push({
+        device: '其他',
+        users: otherUsers,
+        revenue: otherRevenue
+      })
+    }
+  }
+
+  // 准备饼图数据，使用不同的颜色方案
+  const data = topData.map(item => ({
     name: item.device,
-    value: item.users
+    value: item.users,
+    revenue: item.revenue
   }))
+  
+  // 设置颜色方案，区别于国家图表
+  const colorPalette = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452']
   
   const option = {
     title: {
       text: '设备用户占比',
-      left: 'center'
+      left: 'center',
+      top: 0,
+      textStyle: {
+        fontSize: 16,
+        fontWeight: 'normal'
+      }
     },
     tooltip: {
       trigger: 'item',
-      formatter: '{a} <br/>{b}: {c} ({d}%)'
+      formatter: (params: any) => {
+        const item = params.data
+        return `${params.name}<br/>
+                用户数: ${formatNumber(item.value)} (${params.percent}%)<br/>
+                收入: ${formatCurrency(item.revenue)}`
+      }
     },
     legend: {
-      orient: 'vertical',
-      left: 'left',
       type: 'scroll',
+      orient: 'vertical',
+      right: 10,
+      top: 'center',
       pageIconSize: 12,
       pageTextStyle: {
         color: '#888'
       }
     },
+    color: colorPalette,
     series: [
       {
         name: '设备分布',
         type: 'pie',
         radius: '60%',
-        center: ['50%', '60%'],
-        data: data.length > 0 ? data : [{ name: '无数据', value: 1 }],
+        center: ['40%', '50%'],
+        roseType: 'radius', // 使用南丁格尔玫瑰图展示不同
+        itemStyle: {
+          borderRadius: 4,
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        label: {
+          formatter: '{b}: {d}%',
+          show: deviceData.value.length <= 6 // 只在数据较少时显示标签
+        },
         emphasis: {
+          label: {
+            show: true,
+            fontSize: 14,
+            fontWeight: 'bold'
+          },
           itemStyle: {
             shadowBlur: 10,
             shadowOffsetX: 0,
             shadowColor: 'rgba(0, 0, 0, 0.5)'
           }
         },
-        label: {
-          formatter: '{b}: {d}%'
-        }
+        data: data.length > 0 ? data : [{ name: '无数据', value: 1 }]
       }
     ]
   }
   
   deviceChart.setOption(option)
+  
+  // 添加点击事件
+  deviceChart.off('click')
+  deviceChart.on('click', (params: any) => {
+    if (params.name !== '无数据' && params.name !== '其他') {
+      ElMessage.info(`点击了设备: ${params.name}，用户数: ${formatNumber(params.data.value)}`)
+    }
+  })
 }
 
 // 渲染时间线图表
@@ -289,13 +443,37 @@ const renderTimelineChart = async () => {
     timelineChart = echarts.init(timelineChartRef.value)
   }
 
-  const dates = timelineData.value.map(item => item.date).reverse()
-  const users = timelineData.value.map(item => item.user_count).reverse()
-  const revenues = timelineData.value.map(item => item.revenue).reverse()
+  // 反转数据顺序使其按时间正序排列
+  const sortedData = [...timelineData.value].reverse()
+  
+  // 提取数据
+  const dates = sortedData.map(item => item.date)
+  const users = sortedData.map(item => item.user_count)
+  const revenues = sortedData.map(item => item.revenue)
+  
+  // 计算用户增长率数据
+  const userGrowth = []
+  for (let i = 1; i < users.length; i++) {
+    if (users[i-1] === 0) {
+      userGrowth.push(0)
+    } else {
+      const growthRate = ((users[i] - users[i-1]) / users[i-1] * 100).toFixed(2)
+      userGrowth.push(parseFloat(growthRate))
+    }
+  }
+  
+  // 第一天无增长率数据
+  userGrowth.unshift(0)
   
   const option = {
     title: {
-      text: '用户和收入趋势'
+      text: '用户和收入时间趋势',
+      left: 'center',
+      top: 0,
+      textStyle: {
+        fontSize: 16,
+        fontWeight: 'normal'
+      }
     },
     tooltip: {
       trigger: 'axis',
@@ -304,34 +482,133 @@ const renderTimelineChart = async () => {
         label: {
           backgroundColor: '#6a7985'
         }
+      },
+      formatter: function(params: any[]) {
+        let result = `<div style="font-weight:bold;margin-bottom:5px;">${params[0].axisValue}</div>`
+        
+        params.forEach(param => {
+          let value = param.value
+          let unit = ''
+          let color = param.color
+          
+          // 根据不同的数据类型设置不同的格式
+          if (param.seriesName === '收入') {
+            value = formatCurrency(value)
+          } else if (param.seriesName === '用户数') {
+            value = formatNumber(value)
+            unit = '人'
+          } else if (param.seriesName === '用户增长率') {
+            value = `${value}%`
+          }
+          
+          result += `<div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0">
+                     <span style="display:inline-block;margin-right:5px;
+                     border-radius:50%;width:10px;height:10px;background-color:${color};"></span>
+                     <span style="flex-grow:1">${param.seriesName}:</span>
+                     <span style="font-weight:bold">${value}${unit}</span>
+                    </div>`
+        })
+        
+        return result
       }
     },
     legend: {
-      data: ['用户数', '收入']
+      data: ['用户数', '收入', '用户增长率'],
+      bottom: 10
     },
     grid: {
       left: '3%',
       right: '4%',
-      bottom: '3%',
+      bottom: '15%',
+      top: '10%',
       containLabel: true
     },
+    toolbox: {
+      feature: {
+        saveAsImage: { title: '保存为图片' },
+        dataZoom: { title: '区域缩放' },
+        restore: { title: '还原' }
+      },
+      right: 20,
+      top: 0
+    },
+    dataZoom: [
+      {
+        type: 'inside',
+        start: 0,
+        end: 100
+      },
+      {
+        type: 'slider',
+        start: 0,
+        end: 100
+      }
+    ],
     xAxis: [
       {
         type: 'category',
         boundaryGap: false,
-        data: dates.length > 0 ? dates : ['无数据']
+        data: dates.length > 0 ? dates : ['无数据'],
+        axisLabel: {
+          rotate: dates.length > 15 ? 45 : 0 // 日期多时倾斜显示
+        }
       }
     ],
     yAxis: [
       {
         type: 'value',
         name: '用户数',
-        position: 'left'
+        position: 'left',
+        axisLine: {
+          show: true,
+          lineStyle: {
+            color: '#409EFF'
+          }
+        },
+        axisLabel: {
+          formatter: '{value}'
+        },
+        splitLine: {
+          show: true,
+          lineStyle: {
+            type: 'dashed'
+          }
+        }
       },
       {
         type: 'value',
         name: '收入($)',
-        position: 'right'
+        position: 'right',
+        axisLine: {
+          show: true,
+          lineStyle: {
+            color: '#303133'
+          }
+        },
+        axisLabel: {
+          formatter: '${value}'
+        },
+        splitLine: {
+          show: false
+        }
+      },
+      {
+        type: 'value',
+        name: '增长率(%)',
+        position: 'right',
+        offset: 80,
+        axisLine: {
+          show: true,
+          lineStyle: {
+            color: '#67C23A'
+          }
+        },
+        axisLabel: {
+          formatter: '{value}%'
+        },
+        splitLine: {
+          show: false
+        }
       }
     ],
     series: [
@@ -342,11 +619,19 @@ const renderTimelineChart = async () => {
         yAxisIndex: 0,
         smooth: true,
         lineStyle: {
-          width: 2,
+          width: 3,
           color: '#409EFF'
         },
         itemStyle: {
           color: '#409EFF'
+        },
+        symbol: 'circle',
+        symbolSize: 6,
+        markPoint: {
+          data: [
+            { type: 'max', name: '最大值' },
+            { type: 'min', name: '最小值' }
+          ]
         }
       },
       {
@@ -356,44 +641,166 @@ const renderTimelineChart = async () => {
         yAxisIndex: 1,
         smooth: true,
         lineStyle: {
-          width: 2,
+          width: 3,
           color: '#303133'
         },
         itemStyle: {
           color: '#303133'
+        },
+        symbol: 'circle',
+        symbolSize: 6
+      },
+      {
+        name: '用户增长率',
+        type: 'bar',
+        data: userGrowth,
+        yAxisIndex: 2,
+        barWidth: 10,
+        itemStyle: {
+          color: (params: any) => {
+            // 正值为绿色，负值为红色
+            return params.value >= 0 ? '#67C23A' : '#F56C6C';
+          }
         }
       }
     ]
   }
   
   timelineChart.setOption(option)
+  
+  // 添加点击事件
+  timelineChart.off('click')
+  timelineChart.on('click', (params: any) => {
+    // 点击日期条形图时，自动选择该日期
+    if (params.componentType === 'xAxis') {
+      const date = params.value
+      if (date && date !== '无数据') {
+        selectedDate.value = date
+        handleDateChange(new Date(date))
+        ElMessage.info(`已选择日期: ${date}`)
+      }
+    }
+  })
+}
+
+// 日期选择器变化处理函数
+const handleDateChange = (date: Date) => {
+  if (!date) return
+  
+  selectedDate.value = formatDate(date)
+  // 显示加载中提示
+  const loading = ElMessage.info({
+    message: '加载数据中...',
+    duration: 0
+  })
+  
+  // 加载详细数据
+  loadDetailsData(selectedDate.value).then(() => {
+    // 关闭加载提示
+    loading.close()
+    // 更新标题
+    ElMessage.success({
+      message: `已切换到 ${selectedDate.value} 数据`,
+      duration: 1500
+    })
+  })
 }
 
 // 日期范围变化处理
-const handleDateRangeChange = (range: [Date, Date]) => {
+const handleDateRangeChange = async (range: [Date, Date]) => {
   if (!range || range.length !== 2) return
   
   dateRange.value = range
   
   // 根据选定的日期范围重新加载数据
-  const startDate = formatDate(range[0])
   const endDate = formatDate(range[1])
+  selectedDate.value = endDate
   
-  // 重新加载各种数据
+  // 显示加载中提示
+  const loading = ElMessage.info({
+    message: '加载数据中...',
+    duration: 0
+  })
+  
+  try {
+    // 并行加载数据以提高效率
+    await Promise.all([
+      loadTimelineData(),
+      loadDetailsData(selectedDate.value)
+    ])
+    
+    // 关闭加载提示
+    loading.close()
+    
+    // 更新成功提示
+    ElMessage.success({
+      message: `数据已更新，日期范围: ${formatDate(range[0])} 至 ${formatDate(range[1])}`,
+      duration: 1500
+    })
+  } catch (error) {
+    // 关闭加载提示
+    loading.close()
+    
+    // 显示错误提示
+    ElMessage.error({
+      message: '数据加载失败，请重试',
+      duration: 2000
+    })
+    console.error('加载数据失败', error)
+  }
+}
+
+// 加载所有数据
+const loadAllData = () => {
   loadCountryData()
   loadDeviceData()
   loadTimelineData()
-  
-  // 加载最新日期的详情数据
-  loadDetailsData(endDate)
+  loadDetailsData(selectedDate.value)
 }
 
-// 格式化日期为YYYY-MM-DD
-const formatDate = (date: Date): string => {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+// 刷新按钮处理函数
+const handleRefresh = async () => {
+  // 记录开始时间
+  const startTime = Date.now()
+  
+  // 清除所有API缓存，确保获取最新数据
+  clearApiCache()
+  
+  // 使用Promise.all并行加载所有数据以提高效率
+  try {
+    await Promise.all([
+      loadCountryData(),
+      loadDeviceData(),
+      loadTimelineData(),
+      loadDetailsData(selectedDate.value)
+    ])
+    
+    // 计算经过的时间
+    const elapsed = Date.now() - startTime
+    
+    // 如果经过的时间少于200毫秒，则等待一会儿再显示成功消息
+    if (elapsed < 200) {
+      setTimeout(() => {
+        ElMessage.success({
+          message: '刷新成功',
+          duration: 1000
+        })
+      }, 500 - elapsed)
+    } else {
+      // 如果已经超过500毫秒，则立即显示成功消息
+      ElMessage.success({
+        message: '刷新成功',
+        duration: 1000
+      })
+    }
+  } catch (error) {
+    // 显示错误消息
+    ElMessage.error({
+      message: '刷新失败',
+      duration: 1000
+    })
+    console.error('刷新数据时出错:', error)
+  }
 }
 
 // 格式化数字
@@ -421,11 +828,7 @@ const handleResize = () => {
 
 // 初始加载
 onMounted(() => {
-  loadCountryData()
-  loadDeviceData()
-  loadTimelineData()
-  loadDetailsData(currentDate.value)
-  
+  loadAllData()
   window.addEventListener('resize', handleResize)
 })
 
@@ -466,6 +869,29 @@ onBeforeUnmount(() => {
 <template>
   <AppLayout>
     <div class="details-view">
+      <!-- 页面顶部操作栏 -->
+      <div class="actions-bar">
+        <h1>数据详情分析</h1>
+        <div class="actions-right">
+          <el-date-picker
+            v-model="selectedDate"
+            type="date"
+            placeholder="选择日期"
+            format="YYYY-MM-DD"
+            :disabled="loadingDetails"
+            @change="handleDateChange"
+          />
+          <el-button 
+            type="primary" 
+            :icon="RefreshRight" 
+            :loading="loadingCountry || loadingDevice || loadingTimeline || loadingDetails"
+            @click="handleRefresh"
+          >
+            刷新数据
+          </el-button>
+        </div>
+      </div>
+      
       <!-- 国家和设备数据 -->
       <div class="data-section">
         <!-- 国家数据 -->
@@ -479,6 +905,8 @@ onBeforeUnmount(() => {
               start-placeholder="开始日期"
               end-placeholder="结束日期"
               format="YYYY-MM-DD"
+              :shortcuts="dateRangeShortcuts"
+              unlink-panels
               @change="handleDateRangeChange"
             />
           </div>
@@ -491,21 +919,36 @@ onBeforeUnmount(() => {
                 border
                 v-loading="loadingCountry"
                 style="width: 100%"
+                :default-sort="{ prop: 'revenue', order: 'descending' }"
               >
-                <el-table-column prop="country" label="国家" width="120" />
-                <el-table-column prop="users" label="用户数" width="120">
+                <el-table-column prop="country" label="国家" width="120" sortable />
+                <el-table-column prop="users" label="用户数" width="120" sortable>
                   <template #default="scope">
                     {{ formatNumber(scope.row.users) }}
                   </template>
                 </el-table-column>
-                <el-table-column prop="revenue" label="收入">
+                <el-table-column prop="revenue" label="收入" sortable>
                   <template #default="scope">
                     {{ formatCurrency(scope.row.revenue) }}
                   </template>
                 </el-table-column>
               </el-table>
+              
+              <!-- 骨架屏 -->
+              <template v-if="loadingCountry && countryData.length === 0">
+                <div class="skeleton-container">
+                  <el-skeleton :rows="5" animated />
+                </div>
+              </template>
             </div>
-            <div class="data-chart" ref="countryChartRef"></div>
+            <div class="data-chart" ref="countryChartRef">
+              <!-- 图表骨架屏 -->
+              <template v-if="loadingCountry && !countryChart">
+                <div class="chart-skeleton">
+                  <el-skeleton :rows="8" animated />
+                </div>
+              </template>
+            </div>
           </div>
         </div>
         
@@ -520,6 +963,8 @@ onBeforeUnmount(() => {
               start-placeholder="开始日期"
               end-placeholder="结束日期"
               format="YYYY-MM-DD"
+              :shortcuts="dateRangeShortcuts"
+              unlink-panels
               @change="handleDateRangeChange"
             />
           </div>
@@ -532,21 +977,36 @@ onBeforeUnmount(() => {
                 border
                 v-loading="loadingDevice"
                 style="width: 100%"
+                :default-sort="{ prop: 'revenue', order: 'descending' }"
               >
-                <el-table-column prop="device" label="设备" width="120" />
-                <el-table-column prop="users" label="用户数" width="120">
+                <el-table-column prop="device" label="设备" width="120" sortable />
+                <el-table-column prop="users" label="用户数" width="120" sortable>
                   <template #default="scope">
                     {{ formatNumber(scope.row.users) }}
                   </template>
                 </el-table-column>
-                <el-table-column prop="revenue" label="收入">
+                <el-table-column prop="revenue" label="收入" sortable>
                   <template #default="scope">
                     {{ formatCurrency(scope.row.revenue) }}
                   </template>
                 </el-table-column>
               </el-table>
+              
+              <!-- 骨架屏 -->
+              <template v-if="loadingDevice && deviceData.length === 0">
+                <div class="skeleton-container">
+                  <el-skeleton :rows="5" animated />
+                </div>
+              </template>
             </div>
-            <div class="data-chart" ref="deviceChartRef"></div>
+            <div class="data-chart" ref="deviceChartRef">
+              <!-- 图表骨架屏 -->
+              <template v-if="loadingDevice && !deviceChart">
+                <div class="chart-skeleton">
+                  <el-skeleton :rows="8" animated />
+                </div>
+              </template>
+            </div>
           </div>
         </div>
       </div>
@@ -562,11 +1022,13 @@ onBeforeUnmount(() => {
             start-placeholder="开始日期"
             end-placeholder="结束日期"
             format="YYYY-MM-DD"
+            :shortcuts="dateRangeShortcuts"
+            unlink-panels
             @change="handleDateRangeChange"
           />
         </div>
         
-        <div class="timeline-chart" ref="timelineChartRef"></div>
+        <div class="timeline-chart" ref="timelineChartRef" v-loading="loadingTimeline"></div>
       </div>
       
       <!-- 详细数据表格 -->
@@ -579,7 +1041,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         
-        <el-descriptions v-if="detailsData" title="日期概览" :column="4" border>
+        <el-descriptions v-if="detailsData" title="日期概览" :column="4" border v-loading="loadingDetails">
           <el-descriptions-item label="总收入">
             {{ formatCurrency(detailsData.total_revenue) }}
           </el-descriptions-item>
@@ -638,6 +1100,27 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+.actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e6e6e6;
+}
+
+.actions-bar h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.actions-right {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
 .data-section {
   display: flex;
   flex-wrap: wrap;
@@ -675,12 +1158,14 @@ onBeforeUnmount(() => {
 
 .data-table {
   margin-bottom: 20px;
+  position: relative;
 }
 
 .data-chart {
   height: 300px;
   width: 100%;
   margin-top: 20px;
+  position: relative;
 }
 
 .timeline-section {
@@ -695,6 +1180,7 @@ onBeforeUnmount(() => {
   height: 400px;
   width: 100%;
   margin-top: 20px;
+  position: relative;
 }
 
 .details-section {
@@ -735,6 +1221,36 @@ onBeforeUnmount(() => {
   margin: 0 0 10px 0;
   font-size: 16px;
   font-weight: 500;
+}
+
+/* 骨架屏样式 */
+.skeleton-container {
+  padding: 15px;
+  border-radius: 4px;
+  background-color: #fafafa;
+  margin-top: 10px;
+}
+
+.chart-skeleton {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 20px;
+  background-color: rgba(255, 255, 255, 0.8);
+}
+
+/* 表格加载效果 */
+:deep(.el-loading-mask) {
+  background-color: rgba(255, 255, 255, 0.7);
+}
+
+:deep(.el-loading-spinner .path) {
+  stroke: #409eff;
 }
 
 @media (max-width: 1200px) {

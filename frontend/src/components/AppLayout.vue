@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { Fold, Expand, DataAnalysis, Document } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()

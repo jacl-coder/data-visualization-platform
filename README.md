@@ -422,7 +422,7 @@ GET /api/overview
     "user_count": 83,
     "event_count": 491,
     "device_count": 11,
-    "total_revenue": 13242.27
+    "total_revenue": 13242.2696957324
   }
 }
 ```
@@ -444,6 +444,8 @@ GET /api/timeline?days=30
   "data": {
     "items": [
       {"date": "2025-04-10", "event_count": 1, "revenue": 5.99, "user_count": 1},
+      {"date": "2025-04-09", "event_count": 1, "revenue": 5.99, "user_count": 1},
+      {"date": "2025-03-28", "event_count": 9, "revenue": 234.91, "user_count": 4}
       // 更多日期数据...
     ],
     "total": 30
@@ -464,7 +466,9 @@ GET /api/country
   "message": "国家维度数据获取成功",
   "data": {
     "items": [
-      {"country": "HK", "revenue": 3367.31, "users": 32},
+      {"country": "HK", "revenue": 3367.31200559307, "users": 32},
+      {"country": "US", "revenue": 2664.12515840791, "users": 34},
+      {"country": "IT", "revenue": 1699.7, "users": 1}
       // 更多国家数据...
     ],
     "total": 14
@@ -485,7 +489,9 @@ GET /api/device
   "message": "设备维度数据获取成功",
   "data": {
     "items": [
-      {"device": "samsung", "revenue": 9886.38, "users": 79},
+      {"device": "samsung", "revenue": 9886.37613723422, "users": 79},
+      {"device": "oppo", "revenue": 911.82, "users": 3},
+      {"device": "lenovo", "revenue": 799.86, "users": 1}
       // 更多设备数据...
     ],
     "total": 11
@@ -513,13 +519,19 @@ GET /api/details?date=YYYY-MM-DD
   "code": 200,
   "message": "日期详情数据获取成功",
   "data": {
-    "date": "2025-04-09",
-    "total_revenue": 5.99,
+    "date": "2025-03-28",
+    "total_revenue": 234.91,
     "countries": [
-      {"country": "US", "users": 1}
+      {"country": "US", "users": 2},
+      {"country": "JP", "users": 2},
+      {"country": "SG", "users": 1},
+      {"country": "HK", "users": 1}
     ],
     "devices": [
-      {"device": "tcl", "users": 1}
+      {"device": "xiaomi", "users": 1},
+      {"device": "tecno", "users": 1},
+      {"device": "tcl", "users": 1},
+      {"device": "samsung", "users": 1}
     ]
   }
 }
