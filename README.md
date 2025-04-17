@@ -60,7 +60,6 @@ data-visualization-platform/
 │   │   │   └── base.css           # 基础样式文件
 │   │   ├── components/            # 可复用组件（暂无组件）
 │   │   ├── api/                   # API服务
-│   │   │   └── index.ts           # API请求封装
 │   │   ├── stores/                # Pinia状态仓库（暂无状态）
 │   │   ├── router/                # Vue Router配置
 │   │   │   └── index.ts           # 路由配置文件
