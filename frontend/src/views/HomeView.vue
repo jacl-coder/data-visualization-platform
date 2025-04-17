@@ -64,6 +64,14 @@ const trends = reactive({
   }
 })
 
+// 选中日期的数据
+const selectedDateData = reactive({
+  user_count: 0,
+  event_count: 0,
+  device_count: 0,
+  revenue: 0
+})
+
 // 图表实例
 const lineChartRef = ref(null)
 const revenueChartRef = ref(null)
@@ -81,8 +89,8 @@ const days = ref(30)
 // 统计卡片为两行
 const statCards = computed(() => [
   {
-    title: '总用户数',
-    value: formatNumber(overviewData.user_count),
+    title: '当日用户数',
+    value: formatNumber(selectedDateData.user_count),
     icon: 'User',
     color: '#3498db',
     trends: {
@@ -91,8 +99,8 @@ const statCards = computed(() => [
     }
   },
   {
-    title: '总事件数',
-    value: formatNumber(overviewData.event_count),
+    title: '当日事件数',
+    value: formatNumber(selectedDateData.event_count),
     icon: 'Bell',
     color: '#9b59b6',
     trends: {
@@ -101,8 +109,8 @@ const statCards = computed(() => [
     }
   },
   {
-    title: '设备数量',
-    value: formatNumber(overviewData.device_count),
+    title: '当日设备数',
+    value: formatNumber(selectedDateData.device_count),
     icon: 'Monitor',
     color: '#e67e22',
     trends: {
@@ -111,8 +119,8 @@ const statCards = computed(() => [
     }
   },
   {
-    title: '总收入',
-    value: formatCurrency(overviewData.total_revenue),
+    title: '当日收入',
+    value: formatCurrency(selectedDateData.revenue),
     icon: 'Money',
     color: '#27ae60',
     trends: {
@@ -130,6 +138,121 @@ const formatDate = (date: Date): string => {
   return `${year}-${month}-${day}`
 }
 
+// 根据选择的日期更新卡片数据
+const updateCardsBySelectedDate = (date: string) => {
+  // 查找选中日期的数据
+  const dateData = timelineData.value.find(item => item.date === date);
+  
+  if (dateData) {
+    // 更新选中日期的数据
+    selectedDateData.user_count = dateData.user_count;
+    selectedDateData.event_count = dateData.event_count;
+    selectedDateData.revenue = dateData.revenue;
+    
+    // 计算当天涉及的设备数量（简化处理，暂设为总体概览的值，或者一个默认值）
+    // 注意：timelineData中没有设备数量的数据，因此保留使用总体概览的数据
+    selectedDateData.device_count = overviewData.device_count;
+    
+    // 计算选中日期的同比和环比数据
+    
+    // 选中日期的信息
+    const selectedDateObj = new Date(date);
+    const selectedMonth = selectedDateObj.getMonth(); // 0-11
+    const selectedDay = selectedDateObj.getDate(); // 1-31
+    const selectedYear = selectedDateObj.getFullYear();
+    
+    // 去年同日的日期 - 确保是同一月同一天
+    const lastYearDate = `${selectedYear - 1}-${String(selectedMonth + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
+    
+    // 上月同日的日期
+    let lastMonthYear = selectedYear;
+    let lastMonth = selectedMonth - 1;
+    
+    // 处理跨年的情况
+    if (lastMonth < 0) {
+      lastMonth = 11; // 12月
+      lastMonthYear = selectedYear - 1;
+    }
+    
+    // 处理月份天数不同的情况（如31日）
+    let lastMonthDay = selectedDay;
+    const daysInLastMonth = new Date(lastMonthYear, lastMonth + 1, 0).getDate();
+    if (lastMonthDay > daysInLastMonth) {
+      lastMonthDay = daysInLastMonth; // 如果上个月没有这一天，则使用上个月的最后一天
+    }
+    
+    const lastMonthDate = `${lastMonthYear}-${String(lastMonth + 1).padStart(2, '0')}-${String(lastMonthDay).padStart(2, '0')}`;
+    
+    // 查找去年同日的数据（精确匹配）
+    const lastYearData = timelineData.value.find(item => item.date === lastYearDate) 
+      || { user_count: 0, event_count: 0, revenue: 0 };
+    
+    // 查找上月同日的数据（精确匹配）
+    const lastMonthData = timelineData.value.find(item => item.date === lastMonthDate)
+      || { user_count: 0, event_count: 0, revenue: 0 };
+    
+    console.log(`比较日期: 当前=${date}, 去年同日=${lastYearDate}, 上月同日=${lastMonthDate}`);
+    
+    // 计算同比（与去年同期比较）- 确保是同一月同一天
+    if (lastYearData.user_count > 0) {
+      trends.user_count.day_on_day = parseFloat(((dateData.user_count - lastYearData.user_count) / lastYearData.user_count * 100).toFixed(1));
+    } else {
+      trends.user_count.day_on_day = 0;
+    }
+    
+    if (lastYearData.event_count > 0) {
+      trends.event_count.day_on_day = parseFloat(((dateData.event_count - lastYearData.event_count) / lastYearData.event_count * 100).toFixed(1));
+    } else {
+      trends.event_count.day_on_day = 0;
+    }
+    
+    if (lastYearData.revenue > 0) {
+      trends.total_revenue.day_on_day = parseFloat(((dateData.revenue - lastYearData.revenue) / lastYearData.revenue * 100).toFixed(1));
+    } else {
+      trends.total_revenue.day_on_day = 0;
+    }
+    
+    // 计算环比（与上个月比较）- 确保是上月同一天
+    if (lastMonthData.user_count > 0) {
+      trends.user_count.week_on_week = parseFloat(((dateData.user_count - lastMonthData.user_count) / lastMonthData.user_count * 100).toFixed(1));
+    } else {
+      trends.user_count.week_on_week = 0;
+    }
+    
+    if (lastMonthData.event_count > 0) {
+      trends.event_count.week_on_week = parseFloat(((dateData.event_count - lastMonthData.event_count) / lastMonthData.event_count * 100).toFixed(1));
+    } else {
+      trends.event_count.week_on_week = 0;
+    }
+    
+    if (lastMonthData.revenue > 0) {
+      trends.total_revenue.week_on_week = parseFloat(((dateData.revenue - lastMonthData.revenue) / lastMonthData.revenue * 100).toFixed(1));
+    } else {
+      trends.total_revenue.week_on_week = 0;
+    }
+    
+    // 设备数量的同比和环比（由于缺少历史数据，简化处理）
+    trends.device_count.day_on_day = 0;
+    trends.device_count.week_on_week = 0;
+  } else {
+    // 如果找不到对应日期的数据，置为0
+    selectedDateData.user_count = 0;
+    selectedDateData.event_count = 0;
+    selectedDateData.device_count = 0;
+    selectedDateData.revenue = 0;
+    
+    // 同时重置趋势数据
+    trends.user_count.day_on_day = 0;
+    trends.user_count.week_on_week = 0;
+    trends.event_count.day_on_day = 0;
+    trends.event_count.week_on_week = 0;
+    trends.device_count.day_on_day = 0;
+    trends.device_count.week_on_week = 0;
+    trends.total_revenue.day_on_day = 0;
+    trends.total_revenue.week_on_week = 0;
+  }
+}
+
 // 加载概览数据
 const loadOverviewData = async (date: string = formatDate(selectedDate.value)) => {
   loadingOverview.value = true
@@ -138,53 +261,11 @@ const loadOverviewData = async (date: string = formatDate(selectedDate.value)) =
     if (response && response.status === 'success') {
       Object.assign(overviewData, response.data)
       
-      // 计算实际趋势数据，使用时间序列数据计算同比和环比
-      // 注意：同比是与去年同期比较，环比是与上个月比较
+      // 更新选中日期的卡片数据
+      updateCardsBySelectedDate(date)
       
-      // 获取当前数据、上月数据和去年同期数据
-      const currentData = timelineData.value[0] || { user_count: 0, event_count: 0, revenue: 0 }
+      // 已在updateCardsBySelectedDate中计算同比和环比，不需要在这里重复计算
       
-      // 查找上个月同一天的数据（约30天前）
-      const lastMonthIndex = timelineData.value.findIndex(item => {
-        const itemDate = new Date(item.date)
-        const currentDate = new Date(currentData.date)
-        const dayDiff = Math.floor((currentDate.getTime() - itemDate.getTime()) / (1000 * 60 * 60 * 24))
-        return dayDiff >= 28 && dayDiff <= 31 // 大约一个月的时间差
-      })
-      
-      // 查找去年同期的数据（约365天前）
-      const lastYearIndex = timelineData.value.findIndex(item => {
-        const itemDate = new Date(item.date)
-        const currentDate = new Date(currentData.date)
-        const dayDiff = Math.floor((currentDate.getTime() - itemDate.getTime()) / (1000 * 60 * 60 * 24))
-        return dayDiff >= 360 && dayDiff <= 370 // 大约一年的时间差
-      })
-      
-      const lastMonthData = lastMonthIndex !== -1 ? timelineData.value[lastMonthIndex] : { user_count: 0, event_count: 0, revenue: 0 }
-      const lastYearData = lastYearIndex !== -1 ? timelineData.value[lastYearIndex] : { user_count: 0, event_count: 0, revenue: 0 }
-      
-      // 计算同比（与去年同期比较）
-      if (lastYearData.user_count > 0) {
-        trends.user_count.day_on_day = parseFloat(((currentData.user_count - lastYearData.user_count) / lastYearData.user_count * 100).toFixed(1))
-      }
-      if (lastYearData.event_count > 0) {
-        trends.event_count.day_on_day = parseFloat(((currentData.event_count - lastYearData.event_count) / lastYearData.event_count * 100).toFixed(1))
-      }
-      if (lastYearData.revenue > 0) {
-        trends.total_revenue.day_on_day = parseFloat(((currentData.revenue - lastYearData.revenue) / lastYearData.revenue * 100).toFixed(1))
-      }
-      
-      // 计算环比（与上个月比较）
-      if (lastMonthData.user_count > 0) {
-        trends.user_count.week_on_week = parseFloat(((currentData.user_count - lastMonthData.user_count) / lastMonthData.user_count * 100).toFixed(1))
-      }
-      if (lastMonthData.event_count > 0) {
-        trends.event_count.week_on_week = parseFloat(((currentData.event_count - lastMonthData.event_count) / lastMonthData.event_count * 100).toFixed(1))
-      }
-      if (lastMonthData.revenue > 0) {
-        trends.total_revenue.week_on_week = parseFloat(((currentData.revenue - lastMonthData.revenue) / lastMonthData.revenue * 100).toFixed(1))
-      }
-
       // 在数据加载后初始化图表
       initCharts()
     } else if (response) {
@@ -199,6 +280,22 @@ const loadOverviewData = async (date: string = formatDate(selectedDate.value)) =
       device_count: 0,
       total_revenue: 0
     })
+    
+    // 重置选中日期的数据
+    Object.assign(selectedDateData, {
+      user_count: 0,
+      event_count: 0,
+      device_count: 0,
+      revenue: 0
+    })
+    
+    // 重置趋势数据
+    Object.assign(trends, {
+      user_count: { day_on_day: 0, week_on_week: 0 },
+      event_count: { day_on_day: 0, week_on_week: 0 },
+      device_count: { day_on_day: 0, week_on_week: 0 },
+      total_revenue: { day_on_day: 0, week_on_week: 0 }
+    })
   } finally {
     loadingOverview.value = false
   }
@@ -212,6 +309,9 @@ const loadTimelineData = async () => {
     if (response && response.status === 'success') {
       timelineData.value = response.data.items || []
       updateTimelineChart()
+      
+      // 加载时间线数据后，更新选中日期的卡片数据
+      updateCardsBySelectedDate(formatDate(selectedDate.value))
     } else if (response) {
       ElMessage.warning(response.message || '获取时间线数据格式不正确')
       timelineData.value = []
@@ -247,6 +347,11 @@ const formatPercentage = (value: number) => {
 const handleDateChange = (date: Date) => {
   selectedDate.value = date
   const formattedDate = formatDate(date)
+  
+  // 根据选择的日期更新卡片数据
+  updateCardsBySelectedDate(formattedDate)
+  
+  // 加载概览数据（仍然需要加载以更新其他图表）
   loadOverviewData(formattedDate)
 }
 
