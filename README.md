@@ -56,21 +56,28 @@ data-visualization-platform/
 ├── frontend/                      # Vue 3前端
 │   ├── src/                       # 源代码
 │   │   ├── assets/                # 静态资源
-│   │   ├── components/            # 可复用组件
-│   │   ├── composables/           # 组合式API
-│   │   ├── layouts/               # 布局组件
-│   │   ├── views/                 # 页面视图
+│   │   │   ├── main.css           # 主样式文件
+│   │   │   └── base.css           # 基础样式文件
+│   │   ├── components/            # 可复用组件（暂无组件）
 │   │   ├── api/                   # API服务
-│   │   ├── utils/                 # 工具函数
-│   │   ├── stores/                # Pinia状态仓库
+│   │   │   └── index.ts           # API请求封装
+│   │   ├── stores/                # Pinia状态仓库（暂无状态）
 │   │   ├── router/                # Vue Router配置
+│   │   │   └── index.ts           # 路由配置文件
+│   │   ├── views/                 # 页面视图（暂无视图）
 │   │   ├── App.vue                # 应用入口组件
 │   │   └── main.ts                # 应用初始化
 │   ├── public/                    # 公共文件
+│   │   └── favicon.ico            # 网站图标
 │   ├── index.html                 # HTML入口文件
 │   ├── package.json               # npm配置文件
 │   ├── tsconfig.json              # TypeScript配置
-│   └── vite.config.ts             # Vite构建配置
+│   ├── tsconfig.app.json          # 应用TypeScript配置
+│   ├── tsconfig.node.json         # Node环境TypeScript配置
+│   ├── env.d.ts                   # 环境类型声明
+│   ├── eslint.config.ts           # ESLint配置
+│   ├── vite.config.ts             # Vite构建配置
+│   └── .gitignore                 # Git忽略配置
 ├── data_processing/               # Python数据处理
 │   ├── main.py                    # 主处理脚本
 │   ├── process_data.py            # CSV数据处理与导入
