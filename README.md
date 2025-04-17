@@ -501,6 +501,11 @@ GET /api/details?date=YYYY-MM-DD
 参数:
 - `date`: 必填，指定查询的日期，格式为YYYY-MM-DD
 
+返回值说明:
+- 当指定日期没有数据时，`total_revenue`将返回0，`countries`和`devices`将返回空数组
+- 所有数值型字段保证不会返回NULL，空值将默认为0
+- 当指定日期无效或缺少时，将返回500错误
+
 示例响应：
 ```json
 {
@@ -521,7 +526,15 @@ GET /api/details?date=YYYY-MM-DD
 ```
 
 ### 跨域资源共享 (CORS) 支持
-所有API端点都支持跨域资源共享，允许从任何源发起请求。支持的HTTP方法包括GET、POST和OPTIONS。
+所有API端点都支持跨域资源共享，允许从任何源发起请求。支持的HTTP方法包括GET、POST、PUT、DELETE和OPTIONS。响应头中包含以下CORS相关设置：
+
+```
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization
+Access-Control-Allow-Credentials: true
+Access-Control-Max-Age: 86400
+```
 
 ## 许可证
 MIT 

@@ -9,7 +9,7 @@ using json = nlohmann::json;
 
 // CORSMiddleware类已移至ApiServer.h
 
-// 创建统一的API成功响应
+// 创建统一的API成功响应，同时添加CORS头
 json createSuccessResponse(const json& data, const std::string& message = "数据获取成功") {
     json response;
     response["status"] = "success";
@@ -19,7 +19,7 @@ json createSuccessResponse(const json& data, const std::string& message = "数�
     return response;
 }
 
-// 创建API错误响应
+// 创建API错误响应，同时添加CORS头
 json createErrorResponse(int code, const std::string& message) {
     json response;
     response["status"] = "error";
@@ -27,6 +27,15 @@ json createErrorResponse(int code, const std::string& message) {
     response["message"] = message;
     response["data"] = nullptr;
     return response;
+}
+
+// 辅助函数：为响应添加CORS头
+void addCorsHeaders(crow::response& res) {
+    res.set_header("Access-Control-Allow-Origin", "*");
+    res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.set_header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    res.set_header("Access-Control-Allow-Credentials", "true");
+    res.set_header("Access-Control-Max-Age", "86400"); // 24小时缓存预检请求
 }
 
 ApiServer::ApiServer(const std::string& dbPath, int port)
@@ -96,6 +105,8 @@ void ApiServer::setupRoutes() {
         json data = "Data Visualization API Server";
         res.body = createSuccessResponse(data, "API服务器运行正常").dump();
         res.set_header("Content-Type", "application/json");
+        // 添加CORS头
+        addCorsHeaders(res);
         return res;
     });
 }
@@ -135,12 +146,16 @@ void ApiServer::registerOverviewApi() {
             crow::response res;
             res.body = createSuccessResponse(data, "概览数据获取成功").dump();
             res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
             return res;
         } catch (const std::exception& e) {
             crow::response res;
             res.code = 500;
             res.body = createErrorResponse(500, e.what()).dump();
             res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
             return res;
         }
     });
@@ -185,12 +200,16 @@ void ApiServer::registerTimelineApi() {
             crow::response res;
             res.body = createSuccessResponse(responseData, "时间线数据获取成功").dump();
             res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
             return res;
         } catch (const std::exception& e) {
             crow::response res;
             res.code = 500;
             res.body = createErrorResponse(500, e.what()).dump();
             res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
             return res;
         }
     });
@@ -228,12 +247,16 @@ void ApiServer::registerCountryApi() {
             crow::response res;
             res.body = createSuccessResponse(responseData, "国家维度数据获取成功").dump();
             res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
             return res;
         } catch (const std::exception& e) {
             crow::response res;
             res.code = 500;
             res.body = createErrorResponse(500, e.what()).dump();
             res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
             return res;
         }
     });
@@ -271,12 +294,16 @@ void ApiServer::registerDeviceApi() {
             crow::response res;
             res.body = createSuccessResponse(responseData, "设备维度数据获取成功").dump();
             res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
             return res;
         } catch (const std::exception& e) {
             crow::response res;
             res.code = 500;
             res.body = createErrorResponse(500, e.what()).dump();
             res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
             return res;
         }
     });
@@ -313,7 +340,7 @@ void ApiServer::registerDetailsApi() {
             );
             
             auto revenueResult = dbManager->executeQuery(
-                "SELECT SUM(event_revenue_usd) as total_revenue "
+                "SELECT COALESCE(SUM(event_revenue_usd), 0) as total_revenue "
                 "FROM events "
                 "WHERE created_date = ? AND event_name = 'af_purchase'",
                 {date}
@@ -322,7 +349,18 @@ void ApiServer::registerDetailsApi() {
             // 创建数据对象
             json data;
             data["date"] = date;
-            data["total_revenue"] = std::stod(revenueResult[0]["total_revenue"]);
+            
+            // 安全处理可能为空的total_revenue
+            double totalRevenue = 0.0;
+            if (!revenueResult.empty() && !revenueResult[0]["total_revenue"].empty()) {
+                try {
+                    totalRevenue = std::stod(revenueResult[0]["total_revenue"]);
+                } catch (const std::exception&) {
+                    // 转换失败时使用默认值0
+                    totalRevenue = 0.0;
+                }
+            }
+            data["total_revenue"] = totalRevenue;
             
             json countries = json::array();
             for (const auto& row : userCountryResult) {
@@ -346,12 +384,16 @@ void ApiServer::registerDetailsApi() {
             crow::response res;
             res.body = createSuccessResponse(data, "日期详情数据获取成功").dump();
             res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
             return res;
         } catch (const std::exception& e) {
             crow::response res;
             res.code = 500;
             res.body = createErrorResponse(500, e.what()).dump();
             res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
             return res;
         }
     });
