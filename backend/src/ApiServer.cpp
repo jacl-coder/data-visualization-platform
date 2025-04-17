@@ -74,15 +74,16 @@ void ApiServer::setupRoutes() {
     registerCountryApi();
     registerDeviceApi();
     registerDetailsApi();
-    
-    // 添加OPTIONS请求处理
+
     app.route_dynamic("/api/(.*)")
     .methods("OPTIONS"_method)
     ([](const crow::request&) {
         crow::response res;
         res.set_header("Access-Control-Allow-Origin", "*");
-        res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        res.set_header("Access-Control-Allow-Headers", "Content-Type");
+        res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        res.set_header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+        res.set_header("Access-Control-Allow-Credentials", "true");
+        res.set_header("Access-Control-Max-Age", "86400"); // 24小时缓存预检请求
         res.code = 204;
         return res;
     });

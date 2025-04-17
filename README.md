@@ -12,12 +12,13 @@
 
 ## 技术栈
 ### 前端
-- **框架**：React 19.1.0
-- **UI库**：Ant Design 5.24.7
-- **图表库**：AntV/G2 (@ant-design/charts 2.2.7)
-- **状态管理**：React Context API
-- **路由**：React Router 7.5.0
-- **HTTP客户端**：Axios 1.8.4
+- **框架**：Vue 3
+- **UI库**：Element Plus
+- **图表库**：ECharts 5
+- **状态管理**：Pinia
+- **路由**：Vue Router 4
+- **HTTP客户端**：Axios
+- **构建工具**：Vite
 
 ### 后端
 - **语言**：C++
@@ -52,20 +53,24 @@ data-visualization-platform/
 │   │   └── nlohmann/              # JSON库
 │   ├── build/                     # 构建目录
 │   └── CMakeLists.txt             # CMake构建配置
-├── frontend/                      # React前端
+├── frontend/                      # Vue 3前端
 │   ├── src/                       # 源代码
 │   │   ├── assets/                # 静态资源
 │   │   ├── components/            # 可复用组件
-│   │   ├── hooks/                 # 自定义钩子
+│   │   ├── composables/           # 组合式API
 │   │   ├── layouts/               # 布局组件
-│   │   ├── pages/                 # 页面组件
-│   │   ├── services/              # API服务
+│   │   ├── views/                 # 页面视图
+│   │   ├── api/                   # API服务
 │   │   ├── utils/                 # 工具函数
-│   │   ├── App.tsx                # 应用入口组件
-│   │   └── index.tsx              # 渲染入口
+│   │   ├── stores/                # Pinia状态仓库
+│   │   ├── router/                # Vue Router配置
+│   │   ├── App.vue                # 应用入口组件
+│   │   └── main.ts                # 应用初始化
 │   ├── public/                    # 公共文件
+│   ├── index.html                 # HTML入口文件
 │   ├── package.json               # npm配置文件
-│   └── tsconfig.json              # TypeScript配置
+│   ├── tsconfig.json              # TypeScript配置
+│   └── vite.config.ts             # Vite构建配置
 ├── data_processing/               # Python数据处理
 │   ├── main.py                    # 主处理脚本
 │   ├── process_data.py            # CSV数据处理与导入
@@ -204,11 +209,11 @@ cd backend/build
 
 # 启动前端开发服务器 (在新的终端窗口)
 cd frontend
-npm start
+npm run dev
 ```
 
 3. 访问应用
-打开浏览器访问 http://localhost:3000
+打开浏览器访问 http://localhost:5173
 
 ## 数据库设计
 系统使用SQLite数据库，主要包含以下表：

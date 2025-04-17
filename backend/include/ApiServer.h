@@ -10,12 +10,14 @@ class CORSMiddleware
 {
 public:
     struct context {};
-    
+
     void before_handle(crow::request& /*req*/, crow::response& res, context& /*ctx*/) 
     {
         res.set_header("Access-Control-Allow-Origin", "*");
-        res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        res.set_header("Access-Control-Allow-Headers", "Content-Type");
+        res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        res.set_header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+        res.set_header("Access-Control-Allow-Credentials", "true");
+        res.set_header("Access-Control-Max-Age", "86400"); // 24小时
     }
     
     void after_handle(crow::request& /*req*/, crow::response& /*res*/, context& /*ctx*/)

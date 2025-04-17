@@ -83,11 +83,6 @@ __pycache__/
 htmlcov/
 .tox/
 
-# 数据文件
-*.csv
-*.xls
-*.xlsx
-
 # 其他
 # 临时文件
 tmp/
