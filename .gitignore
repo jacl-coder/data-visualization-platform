@@ -43,7 +43,6 @@ frontend/yarn-error.log*
 # 编译输出文件
 backend/build/
 backend/bin/
-backend/lib/
 backend/obj/
 
 # CMake生成文件
@@ -64,12 +63,6 @@ backend/*.cmake
 *.out
 *.app
 
-# 数据库部分
-# SQLite数据库文件
-database/*.db
-database/*.db-journal
-*.sqlite
-*.sqlite3
 
 # 数据处理部分
 # Python虚拟环境
@@ -94,7 +87,6 @@ htmlcov/
 *.csv
 *.xls
 *.xlsx
-!后端考核/test.csv  # 排除原始测试数据
 
 # 其他
 # 临时文件
