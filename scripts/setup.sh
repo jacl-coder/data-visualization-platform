@@ -1,0 +1,414 @@
+#!/bin/bash
+# 数据分析与可视化平台一键安装运行脚本
+# 作者：JACL
+# 版本：1.0
+
+# 设置终端颜色
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# 获取项目根目录(脚本所在目录的父目录)
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BACKEND_DIR="$PROJECT_DIR/backend"
+FRONTEND_DIR="$PROJECT_DIR/frontend"
+DATA_PROCESSING_DIR="$PROJECT_DIR/data_processing"
+DATABASE_DIR="$PROJECT_DIR/database"
+
+# 后端和前端服务的URL
+BACKEND_URL="http://localhost:8080"
+FRONTEND_URL="http://localhost:5173"
+
+# 记录进程ID
+BACKEND_PID=""
+FRONTEND_PID=""
+
+# 项目依赖版本
+REQUIRED_PYTHON_VERSION="3.9"
+REQUIRED_NODE_VERSION="14"
+REQUIRED_NPM_VERSION="7"
+REQUIRED_CMAKE_VERSION="3.20"
+
+# 打印欢迎信息
+function print_welcome() {
+    echo -e "${BLUE}=======================================================${NC}"
+    echo -e "${BLUE}   数据分析与可视化平台安装与运行工具               ${NC}"
+    echo -e "${BLUE}=======================================================${NC}"
+    echo -e "${GREEN}该脚本将自动完成以下任务：${NC}"
+    echo -e "  1. 检查系统环境和必要依赖"
+    echo -e "  2. 安装Python依赖"
+    echo -e "  3. 创建数据库和处理数据"
+    echo -e "  4. 编译C++后端"
+    echo -e "  5. 安装前端依赖并运行"
+    echo -e "  6. 打开浏览器展示应用"
+    echo -e "${BLUE}=======================================================${NC}"
+    echo
+}
+
+# 检查系统依赖
+function check_dependencies() {
+    echo -e "${BLUE}[1/6] 检查系统环境和必要依赖...${NC}"
+    
+    # 检查Python
+    if ! command -v python3 &> /dev/null; then
+        echo -e "${RED}错误: 未找到Python 3${NC}"
+        echo -e "请安装Python 3.9或更高版本后重试"
+        exit 1
+    fi
+    
+    PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
+    echo -e "  - 检测到Python版本: ${GREEN}$PYTHON_VERSION${NC}"
+    
+    if (( $(echo "$PYTHON_VERSION < $REQUIRED_PYTHON_VERSION" | bc -l) )); then
+        echo -e "${YELLOW}警告: 推荐Python版本 $REQUIRED_PYTHON_VERSION 或更高${NC}"
+    fi
+    
+    # 检查pip
+    if ! command -v pip3 &> /dev/null; then
+        echo -e "${RED}错误: 未找到pip3${NC}"
+        echo -e "请安装pip后重试"
+        exit 1
+    fi
+    echo -e "  - 检测到pip: ${GREEN}$(pip3 --version | awk '{print $2}')${NC}"
+    
+    # 检查Node.js
+    if ! command -v node &> /dev/null; then
+        echo -e "${RED}错误: 未找到Node.js${NC}"
+        echo -e "请安装Node.js $REQUIRED_NODE_VERSION 或更高版本后重试"
+        exit 1
+    fi
+    
+    NODE_VERSION=$(node -v | cut -d 'v' -f 2)
+    echo -e "  - 检测到Node.js版本: ${GREEN}$NODE_VERSION${NC}"
+    
+    if (( $(echo "$NODE_VERSION < $REQUIRED_NODE_VERSION" | bc -l) )); then
+        echo -e "${YELLOW}警告: 推荐Node.js版本 $REQUIRED_NODE_VERSION 或更高${NC}"
+    fi
+    
+    # 检查npm
+    if ! command -v npm &> /dev/null; then
+        echo -e "${RED}错误: 未找到npm${NC}"
+        echo -e "请安装npm后重试"
+        exit 1
+    fi
+    
+    NPM_VERSION=$(npm -v)
+    echo -e "  - 检测到npm版本: ${GREEN}$NPM_VERSION${NC}"
+    
+    if (( $(echo "$NPM_VERSION < $REQUIRED_NPM_VERSION" | bc -l) )); then
+        echo -e "${YELLOW}警告: 推荐npm版本 $REQUIRED_NPM_VERSION 或更高${NC}"
+    fi
+    
+    # 检查C++编译器
+    if ! command -v g++ &> /dev/null; then
+        echo -e "${RED}错误: 未找到C++编译器${NC}"
+        echo -e "请安装g++或其他C++编译器后重试"
+        exit 1
+    fi
+    
+    GCC_VERSION=$(g++ --version | head -n1 | awk '{print $NF}')
+    echo -e "  - 检测到g++版本: ${GREEN}$GCC_VERSION${NC}"
+    
+    # 检查CMake
+    if ! command -v cmake &> /dev/null; then
+        echo -e "${RED}错误: 未找到cmake${NC}"
+        echo -e "请安装cmake $REQUIRED_CMAKE_VERSION 或更高版本后重试"
+        exit 1
+    fi
+    
+    CMAKE_VERSION=$(cmake --version | head -n1 | awk '{print $3}')
+    echo -e "  - 检测到cmake版本: ${GREEN}$CMAKE_VERSION${NC}"
+    
+    if (( $(echo "$CMAKE_VERSION < $REQUIRED_CMAKE_VERSION" | bc -l) )); then
+        echo -e "${YELLOW}警告: 推荐cmake版本 $REQUIRED_CMAKE_VERSION 或更高${NC}"
+    fi
+    
+    # 检查SQLite
+    if ! command -v sqlite3 &> /dev/null; then
+        echo -e "${RED}错误: 未找到sqlite3${NC}"
+        echo -e "请安装sqlite3后重试"
+        exit 1
+    fi
+    
+    SQLITE_VERSION=$(sqlite3 --version | awk '{print $1}')
+    echo -e "  - 检测到sqlite3版本: ${GREEN}$SQLITE_VERSION${NC}"
+    
+    # 检查xdg-open或open (用于打开浏览器)
+    if command -v xdg-open &> /dev/null; then
+        OPEN_CMD="xdg-open"
+    elif command -v open &> /dev/null; then
+        OPEN_CMD="open"
+    else
+        OPEN_CMD=""
+        echo -e "${YELLOW}警告: 未找到xdg-open或open命令, 将无法自动打开浏览器${NC}"
+    fi
+    
+    echo -e "${GREEN}系统环境检查完成!${NC}"
+    echo
+}
+
+# 安装Python依赖
+function install_python_deps() {
+    echo -e "${BLUE}[2/6] 安装Python依赖...${NC}"
+    
+    cd "$PROJECT_DIR"
+    
+    if [ ! -f "requirements.txt" ]; then
+        echo -e "${RED}错误: 未找到requirements.txt文件${NC}"
+        exit 1
+    fi
+    
+    echo -e "  - 安装项目所需Python库..."
+    pip3 install -r requirements.txt
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}错误: Python依赖安装失败${NC}"
+        exit 1
+    fi
+    
+    # 复制requirements.txt到数据处理目录，确保兼容性
+    if [ -d "$DATA_PROCESSING_DIR" ] && [ ! -f "$DATA_PROCESSING_DIR/requirements.txt" ]; then
+        echo -e "  - 复制requirements.txt到数据处理目录..."
+        cp "$PROJECT_DIR/requirements.txt" "$DATA_PROCESSING_DIR/"
+    fi
+    
+    echo -e "${GREEN}Python依赖安装完成!${NC}"
+    echo
+}
+
+# 创建数据库和处理数据
+function process_data() {
+    echo -e "${BLUE}[3/6] 创建数据库和处理数据...${NC}"
+    
+    cd "$DATA_PROCESSING_DIR"
+    
+    # 确保database目录存在
+    mkdir -p "$DATABASE_DIR"
+    
+    echo -e "  - 运行数据处理脚本..."
+    # 清空控制台输出但保留错误信息
+    python3 main.py > /dev/null
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}错误: 数据处理失败${NC}"
+        exit 1
+    fi
+    
+    # 检查数据库是否创建成功
+    if [ ! -f "$DATABASE_DIR/app.db" ]; then
+        echo -e "${RED}错误: 数据库创建失败${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}数据处理完成!${NC}"
+    echo
+}
+
+# 编译后端
+function build_backend() {
+    echo -e "${BLUE}[4/6] 编译C++后端...${NC}"
+    
+    cd "$BACKEND_DIR"
+    
+    # 确保build目录存在
+    mkdir -p build
+    cd build
+    
+    echo -e "  - 配置CMake项目..."
+    cmake -DCMAKE_BUILD_TYPE=Release ..
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}错误: CMake配置失败${NC}"
+        exit 1
+    fi
+    
+    echo -e "  - 编译项目..."
+    cmake --build . --config Release
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}错误: 编译失败${NC}"
+        exit 1
+    fi
+    
+    # 检查编译结果
+    if [ ! -f "api_server" ]; then
+        echo -e "${RED}错误: 未找到编译后的api_server可执行文件${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}后端编译完成!${NC}"
+    echo
+}
+
+# 安装前端依赖并构建
+function setup_frontend() {
+    echo -e "${BLUE}[5/6] 安装前端依赖...${NC}"
+    
+    cd "$FRONTEND_DIR"
+    
+    echo -e "  - 安装npm包..."
+    npm install
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}错误: 前端依赖安装失败${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}前端依赖安装完成!${NC}"
+    echo
+}
+
+# 启动服务并打开浏览器
+function start_services() {
+    echo -e "${BLUE}[6/6] 启动服务并打开浏览器...${NC}"
+    
+    # 启动后端服务
+    cd "$BACKEND_DIR/build"
+    echo -e "  - 启动后端服务..."
+    ./api_server &
+    BACKEND_PID=$!
+    
+    # 验证后端服务是否成功启动
+    sleep 2
+    if ! ps -p $BACKEND_PID > /dev/null; then
+        echo -e "${RED}错误: 后端服务启动失败${NC}"
+        cleanup
+        exit 1
+    fi
+    
+    # 等待后端服务完全启动
+    echo -e "  - 等待后端服务就绪..."
+    
+    # 尝试连接后端API
+    RETRY_COUNT=0
+    MAX_RETRIES=10
+    
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        if curl --silent --head --fail $BACKEND_URL > /dev/null; then
+            echo -e "  - ${GREEN}后端服务已就绪${NC}"
+            break
+        fi
+        
+        RETRY_COUNT=$((RETRY_COUNT+1))
+        
+        if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+            echo -e "${RED}错误: 后端服务无响应${NC}"
+            cleanup
+            exit 1
+        fi
+        
+        echo -e "  - 等待后端服务 (尝试 $RETRY_COUNT/$MAX_RETRIES)..."
+        sleep 2
+    done
+    
+    # 启动前端服务
+    cd "$FRONTEND_DIR"
+    echo -e "  - 启动前端开发服务器..."
+    
+    # 启动开发服务器并转入后台
+    npm run dev &
+    FRONTEND_PID=$!
+    
+    # 验证前端服务是否成功启动
+    sleep 5
+    if ! ps -p $FRONTEND_PID > /dev/null; then
+        echo -e "${RED}错误: 前端服务启动失败${NC}"
+        cleanup
+        exit 1
+    fi
+    
+    # 等待前端服务完全启动
+    echo -e "  - 等待前端服务就绪..."
+    
+    # 尝试连接前端服务
+    RETRY_COUNT=0
+    MAX_RETRIES=10
+    
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        if curl --silent --head --fail $FRONTEND_URL > /dev/null; then
+            echo -e "  - ${GREEN}前端服务已就绪${NC}"
+            break
+        fi
+        
+        RETRY_COUNT=$((RETRY_COUNT+1))
+        
+        if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+            echo -e "${YELLOW}警告: 前端服务无响应, 但仍将尝试打开浏览器${NC}"
+            break
+        fi
+        
+        echo -e "  - 等待前端服务 (尝试 $RETRY_COUNT/$MAX_RETRIES)..."
+        sleep 2
+    done
+    
+    # 打开浏览器
+    echo -e "  - 打开浏览器..."
+    if [ -n "$OPEN_CMD" ]; then
+        $OPEN_CMD $FRONTEND_URL
+    else
+        echo -e "${YELLOW}  - 无法自动打开浏览器, 请手动访问: ${FRONTEND_URL}${NC}"
+    fi
+    
+    echo -e "${GREEN}所有服务已成功启动!${NC}"
+    echo -e "${BLUE}=======================================================${NC}"
+    echo -e "${GREEN}数据分析与可视化平台已成功启动!${NC}"
+    echo -e "  - 前端地址: ${FRONTEND_URL}"
+    echo -e "  - 后端API: ${BACKEND_URL}"
+    echo -e "${BLUE}=======================================================${NC}"
+    echo
+    echo -e "按 CTRL+C 停止所有服务并退出..."
+    
+    # 等待用户按Ctrl+C
+    trap cleanup INT
+    wait
+}
+
+# 清理函数
+function cleanup() {
+    echo -e "\n${BLUE}正在清理资源...${NC}"
+    
+    if [ -n "$BACKEND_PID" ]; then
+        echo -e "  - 停止后端服务 (PID: $BACKEND_PID)..."
+        kill $BACKEND_PID 2>/dev/null || true
+    fi
+    
+    if [ -n "$FRONTEND_PID" ]; then
+        echo -e "  - 停止前端服务 (PID: $FRONTEND_PID)..."
+        kill $FRONTEND_PID 2>/dev/null || true
+        
+        # 也kill掉可能的子进程
+        pkill -P $FRONTEND_PID 2>/dev/null || true
+    fi
+    
+    echo -e "${GREEN}清理完成!${NC}"
+    echo -e "${BLUE}=======================================================${NC}"
+    echo -e "${GREEN}感谢使用数据分析与可视化平台!${NC}"
+    echo -e "${BLUE}=======================================================${NC}"
+    exit 0
+}
+
+# 主函数
+function main() {
+    print_welcome
+    
+    # 等待用户确认，改为(Y/n)格式，回车默认为是
+    read -p "是否继续安装? (Y/n): " -n 1 -r REPLY
+    echo
+    # 如果用户输入为空（直接回车）或者输入Y/y，则继续
+    if [[ -z "$REPLY" || $REPLY =~ ^[Yy]$ ]]; then
+        check_dependencies
+        install_python_deps
+        process_data
+        build_backend
+        setup_frontend
+        start_services
+    else
+        echo -e "${RED}安装已取消${NC}"
+        exit 0
+    fi
+}
+
+# 执行主函数
+main 
