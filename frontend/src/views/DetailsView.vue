@@ -474,8 +474,39 @@ const renderTimelineChart = async () => {
     timelineChart = echarts.init(timelineChartRef.value)
   }
 
+  // 创建一个完整的日期范围数组，包含所有日期
+  const startDate = new Date(dateRange.value[0])
+  const endDate = new Date(dateRange.value[1])
+  const dateArray = []
+  const currentDate = new Date(startDate)
+  
+  // 为日期范围内的每一天创建一个日期
+  while (currentDate <= endDate) {
+    dateArray.push(formatDate(new Date(currentDate)))
+    currentDate.setDate(currentDate.getDate() + 1)
+  }
+  
+  // 创建一个Map来存储已有的数据
+  const dataMap = new Map()
+  timelineData.value.forEach(item => {
+    dataMap.set(item.date, item)
+  })
+  
+  // 填充所有日期的数据点，对于没有数据的日期使用0
+  const filledData = dateArray.map(date => {
+    return dataMap.get(date) || {
+      date,
+      user_count: 0,
+      event_count: 0,
+      revenue: 0,
+      device_count: 0
+    }
+  })
+  
   // 反转数据顺序使其按时间正序排列
-  const sortedData = [...timelineData.value].reverse()
+  const sortedData = [...filledData].sort((a, b) => 
+    new Date(a.date).getTime() - new Date(b.date).getTime()
+  )
   
   // 提取数据
   const dates = sortedData.map(item => item.date)
@@ -927,6 +958,7 @@ onBeforeUnmount(() => {
               :shortcuts="dateRangeShortcuts"
               unlink-panels
               @change="handleDateRangeChange"
+              class="date-picker-shorter"
             />
           </div>
           
@@ -985,6 +1017,7 @@ onBeforeUnmount(() => {
               :shortcuts="dateRangeShortcuts"
               unlink-panels
               @change="handleDateRangeChange"
+              class="date-picker-shorter"
             />
           </div>
           
@@ -1044,6 +1077,7 @@ onBeforeUnmount(() => {
             :shortcuts="dateRangeShortcuts"
             unlink-panels
             @change="handleDateRangeChange"
+            class="date-picker-shorter"
           />
         </div>
         
@@ -1064,6 +1098,7 @@ onBeforeUnmount(() => {
             :shortcuts="dateRangeShortcuts"
             unlink-panels
             @change="handleDateRangeChange"
+            class="date-picker-shorter"
           />
         </div>
         
@@ -1129,6 +1164,20 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+/* 日期选择器样式 */
+.date-picker-shorter {
+  width: 260px !important;
+}
+
+/* 全局样式覆盖，使用:deep来影响组件内部样式 */
+:deep(.date-picker-shorter .el-input__wrapper),
+:deep(.date-picker-shorter.el-date-editor--daterange),
+:deep(.date-picker-shorter .el-range-editor),
+:deep(.date-picker-shorter.el-range-editor) {
+  width: 260px !important;
+  max-width: 260px !important;
+}
+
 .actions-bar {
   display: flex;
   justify-content: space-between;
@@ -1165,7 +1214,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 15px;
 }
 
 .section-header h2 {

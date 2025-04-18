@@ -287,11 +287,11 @@ void ApiServer::registerCountryApi() {
             // 创建数据数组
             json dataArray = json::array();
             for (const auto& row : result) {
-                json item;
-                item["country"] = row.at("country_code");
-                item["users"] = std::stoi(row.at("total_users"));
-                item["revenue"] = std::stod(row.at("total_revenue"));
-                dataArray.push_back(item);
+                json countryData;
+                countryData["country"] = row.at("country_code");
+                countryData["users"] = std::stoi(row.at("total_users"));
+                countryData["revenue"] = std::stod(row.at("total_revenue"));
+                dataArray.push_back(countryData);
             }
             
             // 创建包含元数据的响应
@@ -360,11 +360,11 @@ void ApiServer::registerDeviceApi() {
             // 创建数据数组
             json dataArray = json::array();
             for (const auto& row : result) {
-                json item;
-                item["device"] = row.at("device_category");
-                item["users"] = std::stoi(row.at("total_users"));
-                item["revenue"] = std::stod(row.at("total_revenue"));
-                dataArray.push_back(item);
+                json deviceData;
+                deviceData["device"] = row.at("device_category");
+                deviceData["users"] = std::stoi(row.at("total_users"));
+                deviceData["revenue"] = std::stod(row.at("total_revenue"));
+                dataArray.push_back(deviceData);
             }
             
             // 创建包含元数据的响应

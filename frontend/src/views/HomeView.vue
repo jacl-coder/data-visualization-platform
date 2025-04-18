@@ -34,7 +34,7 @@ echarts.use([
 
 // 日期选择
 const selectedDate = ref(new Date())
-const timeRange = ref('week')
+const timeRange = ref('month')
 
 // 概览数据
 const overviewData = reactive<OverviewData>({
@@ -75,16 +75,16 @@ const selectedDateData = reactive({
 // 图表实例
 const lineChartRef = ref(null)
 const revenueChartRef = ref(null)
-const usersChartRef = ref(null)
+const deviceChartRef = ref(null)
 let lineChart: echarts.ECharts | null = null
 let revenueChart: echarts.ECharts | null = null
-let usersChart: echarts.ECharts | null = null
+let deviceChart: echarts.ECharts | null = null
 
 // 时间线数据
 const timelineData = ref<TimelineItem[]>([])
 const loading = ref(false)
 const loadingOverview = ref(false)
-const days = ref(7)
+const days = ref(30)
 
 // 统计卡片为两行
 const statCards = computed(() => [
@@ -130,12 +130,31 @@ const statCards = computed(() => [
   }
 ])
 
+// 日期选择器的禁用日期函数
+const disabledDate = (time: Date) => {
+  return time.getTime() > Date.now();
+}
+
 // 格式化日期为YYYY-MM-DD
 const formatDate = (date: Date): string => {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+// 格式化日期为YYYY-MM-DD 或 "今天"
+const formatDateOrToday = (date: Date): string => {
+  const today = new Date();
+  
+  // 检查是否为今天
+  if (date.getFullYear() === today.getFullYear() &&
+      date.getMonth() === today.getMonth() &&
+      date.getDate() === today.getDate()) {
+    return "今天";
+  } else {
+    return formatDate(date);
+  }
 }
 
 // 根据选择的日期更新卡片数据
@@ -314,10 +333,62 @@ const loadOverviewData = async (date: string = formatDate(selectedDate.value)) =
 const loadTimelineData = async () => {
   loading.value = true
   try {
-    const response = await getTimeline(days.value)
+    // 使用选择的日期作为结束日期，而不是当前日期
+    const endDate = new Date(selectedDate.value) // 所选日期
+    const startDate = new Date(selectedDate.value)
+    startDate.setDate(endDate.getDate() - days.value + 1) // 往前推days.value天
+    
+    // 格式化日期为YYYY-MM-DD（用于显示）
+    const endDateDisplay = formatDateOrToday(endDate)
+    const startDateDisplay = formatDateOrToday(startDate)
+    
+    // 格式化日期为YYYY-MM-DD（用于API调用）
+    const endDateStr = formatDate(endDate)
+    const startDateStr = formatDate(startDate)
+    
+    // 使用日期范围参数加载数据
+    const dateRangeParam = `${startDateStr}|${endDateStr}`
+    
+    const response = await getTimeline(days.value, dateRangeParam)
     if (response && response.status === 'success') {
-      timelineData.value = response.data.items || []
+      // 获取返回的数据
+      const apiData = response.data.items || []
+      
+      // 创建日期填充后的数据结构
+      const filledData = []
+      
+      // 为每一天创建日期对象，从最早的日期开始
+      for (let i = days.value - 1; i >= 0; i--) {
+        const currentDate = new Date(endDate)
+        currentDate.setDate(endDate.getDate() - i)
+        // 对于表格显示使用格式化的日期
+        const dateStr = formatDate(currentDate)
+        
+        // 查找该日期的数据
+        const dayData = apiData.find(item => item.date === dateStr)
+        
+        if (dayData) {
+          // 如果有数据，使用API返回的数据
+          filledData.push(dayData)
+        } else {
+          // 如果没有数据，使用空数据填充
+          filledData.push({
+            date: dateStr,
+            user_count: 0,
+            event_count: 0,
+            revenue: 0,
+            device_count: 0
+          })
+        }
+      }
+      
+      // 数据已经是从早到晚排序的
+      timelineData.value = filledData
+      
+      // 更新所有图表
       updateTimelineChart()
+      updateRevenueChart()
+      updateDeviceChart()
       
       // 加载时间线数据后，更新选中日期的卡片数据
       updateCardsBySelectedDate(formatDate(selectedDate.value))
@@ -357,11 +428,18 @@ const handleDateChange = (date: Date) => {
   selectedDate.value = date
   const formattedDate = formatDate(date)
   
-  // 根据选择的日期更新卡片数据
-  updateCardsBySelectedDate(formattedDate)
-  
-  // 加载概览数据（仍然需要加载以更新其他图表）
-  loadOverviewData(formattedDate)
+  // 重新加载时间线数据，这会自动更新图表
+  loadTimelineData().then(() => {
+    // 根据选择的日期更新卡片数据
+    updateCardsBySelectedDate(formattedDate)
+    
+    // 加载概览数据（仍然需要加载以更新其他图表）
+    loadOverviewData(formattedDate)
+    
+    // 确保收入和设备图表也更新
+    updateRevenueChart()
+    updateDeviceChart()
+  })
 }
 
 // 初始化图表
@@ -378,8 +456,8 @@ const initCharts = () => {
       updateRevenueChart()
     }
     
-    if (usersChartRef.value) {
-      usersChart = echarts.init(usersChartRef.value, null, { renderer: 'canvas' })
+    if (deviceChartRef.value) {
+      deviceChart = echarts.init(deviceChartRef.value, null, { renderer: 'canvas' })
       updateDeviceChart()
     }
   }, 100) // 延长时间以确保DOM已经完全渲染
@@ -389,15 +467,15 @@ const initCharts = () => {
 const updateTimelineChart = () => {
   if (!lineChart || timelineData.value.length === 0) return
   
-  const dates = timelineData.value.map(item => item.date).reverse()
-  const users = timelineData.value.map(item => item.user_count).reverse()
-  const events = timelineData.value.map(item => item.event_count).reverse()
-  const revenues = timelineData.value.map(item => item.revenue).reverse()
-  const devices = timelineData.value.map(item => item.device_count).reverse()
+  const dates = timelineData.value.map(item => item.date)
+  const users = timelineData.value.map(item => item.user_count)
+  const events = timelineData.value.map(item => item.event_count)
+  const revenues = timelineData.value.map(item => item.revenue)
+  const devices = timelineData.value.map(item => item.device_count)
   
   const option = {
     title: {
-      text: '时间线趋势',
+      text: '多维度指标对比',
       left: 'center'
     },
     tooltip: {
@@ -529,20 +607,47 @@ const updateTimelineChart = () => {
   }
   
   lineChart.setOption(option)
+  
+  // 同时更新收入和设备图表
+  updateRevenueChart()
+  updateDeviceChart()
 }
 
 // 更新收入趋势图
 const updateRevenueChart = () => {
   if (!revenueChart || timelineData.value.length === 0) return
   
-  // 提取最近7天的数据
-  const recentData = [...timelineData.value].slice(0, 7).reverse()
-  const dates = recentData.map(item => item.date)
-  const revenues = recentData.map(item => item.revenue)
+  // 根据选择的时间范围确定要显示的天数
+  let daysToShow = 7; // 默认为7天
+  
+  if (timeRange.value === 'month') {
+    daysToShow = 30;
+  } else if (timeRange.value === 'quarter') {
+    daysToShow = 90;
+  }
+  
+  // 确保不超过实际数据数量
+  daysToShow = Math.min(daysToShow, timelineData.value.length);
+  
+  // 根据时间范围获取最新的N天数据
+  const recentData = timelineData.value.slice(-daysToShow);
+  
+  const dates = recentData.map(item => item.date);
+  const revenues = recentData.map(item => item.revenue);
+  
+  // 根据时间范围设置标题
+  let titleText = '';
+  if (timeRange.value === 'week') {
+    titleText = '周收入分析';
+  } else if (timeRange.value === 'month') {
+    titleText = '月度收入表现';
+  } else if (timeRange.value === 'quarter') {
+    titleText = '季度收入概览';
+  }
   
   const revenueOption = {
     title: {
-      text: '近7天收入趋势',
+      text: titleText,
       left: 'center'
     },
     tooltip: {
@@ -554,7 +659,10 @@ const updateRevenueChart = () => {
     },
     xAxis: {
       type: 'category',
-      data: dates
+      data: dates,
+      axisLabel: {
+        rotate: daysToShow > 15 ? 45 : 0 // 数据多时倾斜显示
+      }
     },
     yAxis: {
       type: 'value',
@@ -578,104 +686,74 @@ const updateRevenueChart = () => {
   revenueChart.setOption(revenueOption)
 }
 
-// 更新设备分布图
-const updateDeviceChart = async () => {
-  if (!usersChart) return
+// 更新设备趋势图
+const updateDeviceChart = () => {
+  if (!deviceChart || timelineData.value.length === 0) return
   
-  // 加载设备数据
-  try {
-    const response = await getDeviceData()
-    if (response && response.status === 'success') {
-      const deviceData = response.data.items || []
-      
-      // 准备饼图数据
-      const pieData = deviceData.map(item => ({
-        name: item.device,
-        value: item.users
-      }))
-      
-      const usersOption = {
-        title: {
-          text: '用户设备分布',
-          left: 'center'
-        },
-        tooltip: {
-          trigger: 'item',
-          formatter: '{a} <br/>{b}: {c} ({d}%)'
-        },
-        legend: {
-          orient: 'vertical',
-          left: 'left',
-          type: 'scroll',
-          pageIconSize: 12,
-          pageTextStyle: {
-            color: '#888'
-          }
-        },
-        series: [
-          {
-            name: '设备分布',
-            type: 'pie',
-            radius: '50%',
-            data: pieData,
-            emphasis: {
-              itemStyle: {
-                shadowBlur: 10,
-                shadowOffsetX: 0,
-                shadowColor: 'rgba(0, 0, 0, 0.5)'
-              }
-            },
-            label: {
-              formatter: '{b}: {d}%'
-            }
-          }
-        ]
-      }
-      
-      usersChart.setOption(usersOption)
-    }
-  } catch (error) {
-    console.error('获取设备数据失败', error)
-    ElMessage.error('获取设备数据失败，将显示默认值')
-    
-    // 使用默认数据
-    const defaultOption = {
-      title: {
-        text: '用户设备分布',
-        left: 'center'
-      },
-      tooltip: {
-        trigger: 'item'
-      },
-      legend: {
-        orient: 'vertical',
-        left: 'left'
-      },
-      series: [
-        {
-          name: '设备分布',
-          type: 'pie',
-          radius: '50%',
-          data: [
-            { value: 1048, name: 'Mobile' },
-            { value: 735, name: 'Tablet' },
-            { value: 580, name: 'Desktop' },
-            { value: 484, name: 'Smart TV' },
-            { value: 300, name: 'Others' }
-          ],
-          emphasis: {
-            itemStyle: {
-              shadowBlur: 10,
-              shadowOffsetX: 0,
-              shadowColor: 'rgba(0, 0, 0, 0.5)'
-            }
-          }
-        }
-      ]
-    }
-    
-    usersChart.setOption(defaultOption)
+  // 根据选择的时间范围确定要显示的天数
+  let daysToShow = 7; // 默认为7天
+  
+  if (timeRange.value === 'month') {
+    daysToShow = 30;
+  } else if (timeRange.value === 'quarter') {
+    daysToShow = 90;
   }
+  
+  // 确保不超过实际数据数量
+  daysToShow = Math.min(daysToShow, timelineData.value.length);
+  
+  // 根据时间范围获取最新的N天数据
+  const recentData = timelineData.value.slice(-daysToShow);
+  
+  const dates = recentData.map(item => item.date);
+  const deviceCounts = recentData.map(item => item.device_count || 0);
+  
+  // 根据时间范围设置标题
+  let titleText = '';
+  if (timeRange.value === 'week') {
+    titleText = '周设备活跃统计';
+  } else if (timeRange.value === 'month') {
+    titleText = '月度设备分布';
+  } else if (timeRange.value === 'quarter') {
+    titleText = '季度设备变化';
+  }
+  
+  const deviceOption = {
+    title: {
+      text: titleText,
+      left: 'center'
+    },
+    tooltip: {
+      trigger: 'axis',
+      formatter: function(params: any) {
+        const date = params[0].axisValue
+        return `${date}: ${params[0].value} 台设备`
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLabel: {
+        rotate: daysToShow > 15 ? 45 : 0 // 数据多时倾斜显示
+      }
+    },
+    yAxis: {
+      type: 'value'
+    },
+    series: [{
+      data: deviceCounts,
+      type: 'line',
+      smooth: true,
+      areaStyle: {
+        opacity: 0.3
+      },
+      itemStyle: {
+        color: '#3498db'
+      }
+    }]
+  }
+  
+  deviceChart.setOption(deviceOption)
 }
 
 // 时间范围变化
@@ -692,8 +770,9 @@ const handleTimeRangeChange = () => {
       break
   }
   loadTimelineData().then(() => {
-    // 更新收入趋势图
+    // 更新收入趋势图和设备趋势图
     updateRevenueChart()
+    updateDeviceChart()
   })
 }
 
@@ -701,7 +780,7 @@ const handleTimeRangeChange = () => {
 const handleResize = () => {
   lineChart?.resize()
   revenueChart?.resize()
-  usersChart?.resize()
+  deviceChart?.resize()
 }
 
 // 初始加载数据
@@ -719,7 +798,7 @@ const onUnmounted = () => {
   // 销毁图表实例
   lineChart?.dispose()
   revenueChart?.dispose()
-  usersChart?.dispose()
+  deviceChart?.dispose()
 }
 </script>
 
@@ -741,6 +820,7 @@ const onUnmounted = () => {
             format="YYYY-MM-DD"
             class="date-picker"
             @change="handleDateChange"
+            :disabled-date="disabledDate"
           />
           
           <el-radio-group v-model="timeRange" class="time-range-selector" @change="handleTimeRangeChange">
@@ -790,7 +870,7 @@ const onUnmounted = () => {
         <!-- 时间线趋势图 -->
         <div class="chart-container main-chart" v-loading="loading">
           <div class="chart-header">
-            <h3>时间线数据趋势</h3>
+            <h3>多维度数据指标实时监控</h3>
           </div>
           <div ref="lineChartRef" class="chart"></div>
         </div>
@@ -799,7 +879,7 @@ const onUnmounted = () => {
           <!-- 收入趋势图 -->
           <div class="chart-container half-chart">
             <div class="chart-header">
-              <h3>收入趋势</h3>
+              <h3>业务收入动态表现</h3>
             </div>
             <div ref="revenueChartRef" class="chart"></div>
           </div>
@@ -807,9 +887,9 @@ const onUnmounted = () => {
           <!-- 用户设备分布图 -->
           <div class="chart-container half-chart">
             <div class="chart-header">
-              <h3>用户设备分布</h3>
+              <h3>设备活跃度分析</h3>
             </div>
-            <div ref="usersChartRef" class="chart"></div>
+            <div ref="deviceChartRef" class="chart"></div>
           </div>
         </div>
       </div>
@@ -817,8 +897,13 @@ const onUnmounted = () => {
       <!-- 数据表格 -->
       <div class="data-table-section">
         <div class="table-header">
-          <h3>详细数据</h3>
-          <el-select v-model="days" placeholder="选择时间范围" @change="loadTimelineData">
+          <h3>详情数据</h3>
+          <el-select 
+            v-model="days" 
+            placeholder="选择时间范围" 
+            @change="loadTimelineData"
+            class="days-select"
+          >
             <el-option label="最近7天" :value="7" />
             <el-option label="最近30天" :value="30" />
             <el-option label="最近90天" :value="90" />
@@ -826,7 +911,7 @@ const onUnmounted = () => {
         </div>
         
         <el-table
-          :data="timelineData"
+          :data="[...timelineData].reverse()"
           stripe
           border
           v-loading="loading"
@@ -1057,6 +1142,7 @@ const onUnmounted = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: nowrap;
 }
 
 .table-header h3 {
@@ -1064,10 +1150,17 @@ const onUnmounted = () => {
   font-size: 16px;
   font-weight: 500;
   color: #303133;
+  white-space: nowrap;
 }
 
 .data-table {
   width: 100%;
+}
+
+.days-select {
+  min-width: 120px;
+  width: auto;
+  margin-left: 10px;
 }
 
 /* 响应式布局 */
