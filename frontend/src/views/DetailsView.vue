@@ -15,7 +15,6 @@ import { CanvasRenderer } from 'echarts/renderers'
 import AppLayout from '../components/AppLayout.vue'
 import { getCountryData, getDeviceData, getTimeline, getDetailsData, clearApiCache } from '../api'
 import type { CountryItem, DeviceItem, TimelineItem, DetailsData } from '../api'
-import { RefreshRight } from '@element-plus/icons-vue'
 
 // 注册ECharts组件
 echarts.use([
@@ -62,7 +61,7 @@ const formatDate = (date: Date): string => {
   return `${year}-${month}-${day}`
 }
 
-// 选中的日期
+// 为兼容性保留此引用，但实际使用日期范围
 const selectedDate = ref(formatDate(new Date()))
 
 // 日期范围快捷选项
@@ -193,6 +192,33 @@ const createEmptyDetailsData = (date: string): DetailsData => {
     total_revenue: 0,
     countries: [],
     devices: []
+  }
+}
+
+// 加载日期范围的详细数据
+const loadDetailsDataForRange = async (startDate: string, endDate: string) => {
+  try {
+    // 先加载日期范围的最后一天数据作为主要详情数据
+    const response = await getDetailsData(endDate, loadingDetails)
+    
+    if (response && response.status === 'success') {
+      detailsData.value = response.data
+      
+      // 修改数据的标题，指明这是日期范围的数据
+      if (startDate !== endDate) {
+        detailsData.value.date = `${startDate} 至 ${endDate}`;
+      }
+      
+    } else if (response) {
+      ElMessage.warning(response.message || '获取详情数据格式不正确')
+      detailsData.value = createEmptyDetailsData(`${startDate} 至 ${endDate}`)
+    } else {
+      detailsData.value = createEmptyDetailsData(`${startDate} 至 ${endDate}`)
+    }
+  } catch (error) {
+    console.error('获取详情数据出错', error)
+    ElMessage.error('获取详情数据出错，将显示默认值')
+    detailsData.value = createEmptyDetailsData(`${startDate} 至 ${endDate}`)
   }
 }
 
@@ -680,46 +706,38 @@ const renderTimelineChart = async () => {
       const date = params.value
       if (date && date !== '无数据') {
         selectedDate.value = date
-        handleDateChange(new Date(date))
+        // 设置日期范围，使用选中日期作为开始和结束
+        const selectedDateObj = new Date(date)
+        
+        // 更新日期范围
+        dateRange.value = [selectedDateObj, selectedDateObj]
+        
+        // 加载选定日期的数据
+        const formattedDate = formatDate(selectedDateObj)
+        
+        // 显示加载中提示
+        const loading = ElMessage.info({
+          message: '加载数据中...',
+          duration: 0
+        })
+        
+        // 并行加载数据
+        Promise.all([
+          loadCountryData(formattedDate),
+          loadDeviceData(formattedDate),
+          loadTimelineData(),
+          loadDetailsDataForRange(formattedDate, formattedDate)
+        ]).then(() => {
+          loading.close()
+          ElMessage.success(`已切换到 ${formattedDate} 数据`)
+        }).catch(() => {
+          loading.close()
+          ElMessage.error('数据加载失败')
+        })
+        
         ElMessage.info(`已选择日期: ${date}`)
       }
     }
-  })
-}
-
-// 日期选择器变化处理函数
-const handleDateChange = (date: Date) => {
-  if (!date) return
-  
-  selectedDate.value = formatDate(date)
-  // 显示加载中提示
-  const loading = ElMessage.info({
-    message: '加载数据中...',
-    duration: 0
-  })
-  
-  // 并行加载所有相关数据
-  Promise.all([
-    loadDetailsData(selectedDate.value),
-    loadCountryData(selectedDate.value),  // 也重新加载国家数据
-    loadDeviceData(selectedDate.value)    // 也重新加载设备数据
-  ]).then(() => {
-    // 关闭加载提示
-    loading.close()
-    // 更新标题
-    ElMessage.success({
-      message: `已切换到 ${selectedDate.value} 数据`,
-      duration: 1500
-    })
-  }).catch(error => {
-    // 关闭加载提示
-    loading.close()
-    // 显示错误提示
-    ElMessage.error({
-      message: '数据加载失败，请重试',
-      duration: 2000
-    })
-    console.error('加载数据失败', error)
   })
 }
 
@@ -744,7 +762,7 @@ const handleDateRangeChange = async (range: [Date, Date]) => {
     // 并行加载数据以提高效率
     await Promise.all([
       loadTimelineData(),
-      loadDetailsData(selectedDate.value),
+      loadDetailsDataForRange(startDate, endDate), // 使用日期范围加载详细数据
       loadCountryDataForRange(startDate, endDate),
       loadDeviceDataForRange(startDate, endDate)
     ])
@@ -819,56 +837,7 @@ const loadAllData = () => {
   loadCountryDataForRange(start, end)
   loadDeviceDataForRange(start, end)
   loadTimelineData()
-  loadDetailsData(selectedDate.value)
-}
-
-// 刷新按钮处理函数
-const handleRefresh = async () => {
-  // 记录开始时间
-  const startTime = Date.now()
-  
-  // 清除所有API缓存，确保获取最新数据
-  clearApiCache()
-  
-  // 获取日期范围
-  const start = formatDate(dateRange.value[0])
-  const end = formatDate(dateRange.value[1])
-  
-  // 使用Promise.all并行加载所有数据以提高效率
-  try {
-    await Promise.all([
-      loadCountryDataForRange(start, end),
-      loadDeviceDataForRange(start, end),
-      loadTimelineData(),
-      loadDetailsData(selectedDate.value)
-    ])
-    
-    // 计算经过的时间
-    const elapsed = Date.now() - startTime
-    
-    // 如果经过的时间少于200毫秒，则等待一会儿再显示成功消息
-    if (elapsed < 200) {
-      setTimeout(() => {
-        ElMessage.success({
-          message: '刷新成功',
-          duration: 1000
-        })
-      }, 500 - elapsed)
-    } else {
-      // 如果已经超过500毫秒，则立即显示成功消息
-      ElMessage.success({
-        message: '刷新成功',
-        duration: 1000
-      })
-    }
-  } catch (error) {
-    // 显示错误消息
-    ElMessage.error({
-      message: '刷新失败',
-      duration: 1000
-    })
-    console.error('刷新数据时出错:', error)
-  }
+  loadDetailsDataForRange(start, end) // 使用日期范围加载详细数据
 }
 
 // 格式化数字
@@ -940,24 +909,6 @@ onBeforeUnmount(() => {
       <!-- 页面顶部操作栏 -->
       <div class="actions-bar">
         <h1>数据详情分析</h1>
-        <div class="actions-right">
-          <el-date-picker
-            v-model="selectedDate"
-            type="date"
-            placeholder="选择日期"
-            format="YYYY-MM-DD"
-            :disabled="loadingDetails"
-            @change="handleDateChange"
-          />
-          <el-button 
-            type="primary" 
-            :icon="RefreshRight" 
-            :loading="loadingCountry || loadingDevice || loadingTimeline || loadingDetails"
-            @click="handleRefresh"
-          >
-            刷新数据
-          </el-button>
-        </div>
       </div>
       
       <!-- 国家和设备数据 -->
@@ -1103,13 +1054,23 @@ onBeforeUnmount(() => {
       <div class="details-section">
         <div class="section-header">
           <h2>详细数据</h2>
-          <div class="details-date" v-if="detailsData">
-            <span class="date-label">日期:</span> 
-            <span class="date-value">{{ detailsData.date }}</span>
-          </div>
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            format="YYYY-MM-DD"
+            :shortcuts="dateRangeShortcuts"
+            unlink-panels
+            @change="handleDateRangeChange"
+          />
         </div>
         
         <el-descriptions v-if="detailsData" title="日期概览" :column="4" border v-loading="loadingDetails">
+          <el-descriptions-item label="日期">
+            {{ detailsData.date }}
+          </el-descriptions-item>
           <el-descriptions-item label="总收入">
             {{ formatCurrency(detailsData.total_revenue) }}
           </el-descriptions-item>
@@ -1181,12 +1142,6 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-}
-
-.actions-right {
-  display: flex;
-  gap: 15px;
-  align-items: center;
 }
 
 .data-section {
