@@ -125,6 +125,10 @@ data-visualization-platform/
 - C++ 编译器（支持C++17，已在 GCC 13.3.0 上测试）
 - CMake 3.20+（已在 CMake 3.28.3 上测试）
 - SQLite 3.35+（已在 SQLite 3.45.3 上测试）
+- Asio库（C++异步I/O库，用于后端网络通信）
+  - Debian/Ubuntu: `sudo apt-get install libasio-dev`
+  - CentOS/RHEL/Fedora: `sudo yum install asio-devel`
+  - macOS: `brew install asio`
 
 ### 已测试环境
 - 操作系统：Ubuntu Linux（内核 6.11.0）
@@ -209,6 +213,7 @@ chmod +x scripts/setup.sh
 - 检查系统环境（Python, Node.js, npm, CMake, SQLite）
 - 安装所需依赖
 - 处理CSV数据并导入SQLite
+- 清理旧的构建文件
 - 编译C++后端
 - 安装前端依赖并启动服务
 - 启动后端服务

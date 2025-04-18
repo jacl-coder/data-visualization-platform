@@ -280,6 +280,57 @@ function check_dependencies() {
     SQLITE_VERSION=$(sqlite3 --version | awk '{print $1}')
     echo -e "  - 检测到sqlite3版本: ${GREEN}$SQLITE_VERSION${NC}"
     
+    # 检查Asio库（C++后端依赖）
+    echo -e "  - 检查Asio库..."
+    if [ "$OS_TYPE" == "debian" ]; then
+        if ! dpkg -l | grep -q libasio-dev; then
+            echo -e "${YELLOW}未找到Asio库，尝试自动安装...${NC}"
+            sudo apt-get update && sudo apt-get install -y libasio-dev
+            if dpkg -l | grep -q libasio-dev; then
+                echo -e "${GREEN}Asio库安装成功!${NC}"
+            else
+                echo -e "${RED}错误: Asio库安装失败${NC}"
+                echo -e "请手动安装: sudo apt-get install libasio-dev"
+                exit 1
+            fi
+        else
+            echo -e "  - 检测到Asio库已安装"
+        fi
+    elif [ "$OS_TYPE" == "redhat" ]; then
+        if ! rpm -qa | grep -q asio; then
+            echo -e "${YELLOW}未找到Asio库，尝试自动安装...${NC}"
+            sudo yum install -y asio-devel
+            if rpm -qa | grep -q asio; then
+                echo -e "${GREEN}Asio库安装成功!${NC}"
+            else
+                echo -e "${RED}错误: Asio库安装失败${NC}"
+                echo -e "请手动安装: sudo yum install asio-devel"
+                exit 1
+            fi
+        else
+            echo -e "  - 检测到Asio库已安装"
+        fi
+    elif [ "$OS_TYPE" == "mac" ]; then
+        if ! brew list --formula | grep -q asio; then
+            echo -e "${YELLOW}未找到Asio库，尝试自动安装...${NC}"
+            brew install asio
+            if brew list --formula | grep -q asio; then
+                echo -e "${GREEN}Asio库安装成功!${NC}"
+            else
+                echo -e "${RED}错误: Asio库安装失败${NC}"
+                echo -e "请手动安装: brew install asio"
+                exit 1
+            fi
+        else
+            echo -e "  - 检测到Asio库已安装"
+        fi
+    else
+        echo -e "${YELLOW}警告: 无法自动检测或安装Asio库，如果后续构建失败，请手动安装${NC}"
+        echo -e "  - Debian/Ubuntu: sudo apt-get install libasio-dev"
+        echo -e "  - CentOS/RHEL/Fedora: sudo yum install asio-devel"
+        echo -e "  - macOS: brew install asio"
+    fi
+    
     # 检查xdg-open或open (用于打开浏览器)
     if command -v xdg-open &> /dev/null; then
         OPEN_CMD="xdg-open"
@@ -362,7 +413,14 @@ function build_backend() {
     
     cd "$BACKEND_DIR"
     
-    # 确保build目录存在
+    # 检查build目录是否存在，存在则清除内容后重新创建
+    if [ -d "build" ]; then
+        echo -e "  - 清除旧的构建文件..."
+        rm -rf build
+    fi
+    
+    # 创建新的build目录
+    echo -e "  - 创建build目录..."
     mkdir -p build
     cd build
     
