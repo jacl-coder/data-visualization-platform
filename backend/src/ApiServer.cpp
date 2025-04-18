@@ -276,11 +276,11 @@ void ApiServer::registerCountryApi() {
             // 查询各国家数据，使用日期参数
             auto result = dbManager->executeQuery(
                 "SELECT country_code, SUM(user_count) as total_users, "
-                "SUM(revenue_usd) as total_revenue "
+                "SUM(revenue_usd) as revenue "
                 "FROM country_stats " +
                 whereClause +
                 "GROUP BY country_code "
-                "ORDER BY total_revenue DESC",
+                "ORDER BY revenue DESC",
                 params
             );
             
@@ -290,7 +290,7 @@ void ApiServer::registerCountryApi() {
                 json countryData;
                 countryData["country"] = row.at("country_code");
                 countryData["users"] = std::stoi(row.at("total_users"));
-                countryData["revenue"] = std::stod(row.at("total_revenue"));
+                countryData["revenue"] = std::stod(row.at("revenue"));
                 dataArray.push_back(countryData);
             }
             
@@ -349,11 +349,11 @@ void ApiServer::registerDeviceApi() {
             // 查询各设备数据，使用日期参数
             auto result = dbManager->executeQuery(
                 "SELECT device_category, SUM(user_count) as total_users, "
-                "SUM(revenue_usd) as total_revenue "
+                "SUM(revenue_usd) as revenue "
                 "FROM device_stats " +
                 whereClause +
                 "GROUP BY device_category "
-                "ORDER BY total_revenue DESC",
+                "ORDER BY revenue DESC",
                 params
             );
             
@@ -363,7 +363,7 @@ void ApiServer::registerDeviceApi() {
                 json deviceData;
                 deviceData["device"] = row.at("device_category");
                 deviceData["users"] = std::stoi(row.at("total_users"));
-                deviceData["revenue"] = std::stod(row.at("total_revenue"));
+                deviceData["revenue"] = std::stod(row.at("revenue"));
                 dataArray.push_back(deviceData);
             }
             

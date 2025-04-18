@@ -1102,58 +1102,35 @@ onBeforeUnmount(() => {
           />
         </div>
         
-        <el-descriptions v-if="detailsData" title="日期概览" :column="4" border v-loading="loadingDetails">
-          <el-descriptions-item label="日期">
-            {{ detailsData.date }}
-          </el-descriptions-item>
-          <el-descriptions-item label="总收入">
-            {{ formatCurrency(detailsData.total_revenue) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="国家数量">
-            {{ detailsData.countries.length }}
-          </el-descriptions-item>
-          <el-descriptions-item label="设备类型数量">
-            {{ detailsData.devices.length }}
-          </el-descriptions-item>
-        </el-descriptions>
-        
-        <div class="details-tables" v-if="detailsData">
-          <div class="details-countries">
-            <h3>国家分布</h3>
-            <el-table
-              :data="detailsData.countries"
-              stripe
-              border
-              v-loading="loadingDetails"
-              style="width: 100%"
-            >
-              <el-table-column prop="country" label="国家" width="120" />
-              <el-table-column prop="users" label="用户数" width="120">
-                <template #default="scope">
-                  {{ formatNumber(scope.row.users) }}
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
-          
-          <div class="details-devices">
-            <h3>设备分布</h3>
-            <el-table
-              :data="detailsData.devices"
-              stripe
-              border
-              v-loading="loadingDetails"
-              style="width: 100%"
-            >
-              <el-table-column prop="device" label="设备" width="120" />
-              <el-table-column prop="users" label="用户数" width="120">
-                <template #default="scope">
-                  {{ formatNumber(scope.row.users) }}
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
-        </div>
+        <el-table
+          :data="timelineData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())"
+          stripe
+          border
+          v-loading="loadingTimeline"
+          class="data-table"
+        >
+          <el-table-column prop="date" label="日期" min-width="100" />
+          <el-table-column prop="user_count" label="用户数" min-width="100">
+            <template #default="scope">
+              {{ formatNumber(scope.row.user_count) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="event_count" label="事件数" min-width="100">
+            <template #default="scope">
+              {{ formatNumber(scope.row.event_count) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="设备数" min-width="100">
+            <template #default="scope">
+              {{ formatNumber(scope.row.device_count) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="revenue" label="收入" min-width="120">
+            <template #default="scope">
+              {{ formatCurrency(scope.row.revenue) }}
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
     </div>
   </AppLayout>
@@ -1260,6 +1237,12 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   padding: 20px;
+  margin-bottom: 30px;
+}
+
+.details-section .data-table {
+  width: 100%;
+  margin-top: 15px;
 }
 
 .details-date {

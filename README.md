@@ -459,10 +459,14 @@ GET /api/overview
 ### 时间维度数据 (/api/timeline)
 ```
 GET /api/timeline?days=30
-返回最近N天的时间序列数据，包括每天的用户数、事件数、设备数和收入。
+GET /api/timeline?dateRange=YYYY-MM-DD|YYYY-MM-DD
+返回时间序列数据，包括每天的用户数、事件数、设备数和收入。
 ```
 参数:
 - `days`: 可选，要返回的天数，默认30天
+- `dateRange`: 可选，指定日期范围，格式为"起始日期|结束日期"
+
+注意: `days`和`dateRange`参数互斥，如果同时提供，将优先使用`dateRange`参数。
 
 示例响应：
 ```json
@@ -474,7 +478,6 @@ GET /api/timeline?days=30
     "items": [
       {"date": "2025-04-10", "event_count": 1, "revenue": 5.99, "user_count": 1, "device_count": 1},
       {"date": "2025-04-09", "event_count": 1, "revenue": 5.99, "user_count": 1, "device_count": 1},
-      {"date": "2025-03-28", "event_count": 9, "revenue": 234.91, "user_count": 4, "device_count": 3}
       // 更多日期数据...
     ],
     "total": 30
@@ -503,8 +506,8 @@ GET /api/country?date=YYYY-MM-DD|YYYY-MM-DD
   "message": "国家维度数据获取成功",
   "data": {
     "items": [
-      {"country": "HK", "revenue": 3367.31200559307, "users": 32},
-      {"country": "US", "revenue": 2664.12515840791, "users": 34},
+      {"country": "HK", "revenue": 3367.31, "users": 32},
+      {"country": "US", "revenue": 2664.12, "users": 34},
       {"country": "IT", "revenue": 1699.7, "users": 1}
       // 更多国家数据...
     ],
@@ -518,7 +521,7 @@ GET /api/country?date=YYYY-MM-DD|YYYY-MM-DD
 GET /api/device
 GET /api/device?date=YYYY-MM-DD
 GET /api/device?date=YYYY-MM-DD|YYYY-MM-DD
-返回按设备分组的统计数据，包括用户数和收入，按收入降序排列。
+返回按设备类型分组的统计数据，包括用户数和收入，按收入降序排列。
 ```
 参数:
 - `date`: 可选，指定查询的日期。支持以下格式：
@@ -534,7 +537,7 @@ GET /api/device?date=YYYY-MM-DD|YYYY-MM-DD
   "message": "设备维度数据获取成功",
   "data": {
     "items": [
-      {"device": "samsung", "revenue": 9886.37613723422, "users": 79},
+      {"device": "samsung", "revenue": 9886.37, "users": 79},
       {"device": "oppo", "revenue": 911.82, "users": 3},
       {"device": "lenovo", "revenue": 799.86, "users": 1}
       // 更多设备数据...
@@ -566,9 +569,6 @@ GET /api/details?date=YYYY-MM-DD
   "data": {
     "date": "2025-03-28",
     "total_revenue": 234.91,
-    "total_users": 4,
-    "total_events": 9,
-    "device_count": 3,
     "countries": [
       {"country": "US", "users": 2},
       {"country": "JP", "users": 2},
@@ -584,17 +584,6 @@ GET /api/details?date=YYYY-MM-DD
   }
 }
 ```
-
-### API响应字段说明
-
-所有API返回的字段名称已经与前端期望的字段类型保持一致：
-
-- `/api/timeline`: 返回包含`date`, `user_count`, `event_count`, `revenue`, `device_count`的数组
-- `/api/country`: 返回包含`country`, `users`, `revenue`的数组
-- `/api/device`: 返回包含`device`, `users`, `revenue`的数组
-- `/api/details`: 返回包含`date`, `total_revenue`, `countries`, `devices`的对象
-
-当查询不存在数据的日期（如数据库中没有记录的日期）时，API会返回空数组或默认值，而不是错误。前端应相应处理这种情况。
 
 ### 跨域资源共享 (CORS) 支持
 所有API端点都支持跨域资源共享，允许从任何源发起请求。支持的HTTP方法包括GET、POST、PUT、DELETE和OPTIONS。响应头中包含以下CORS相关设置：
