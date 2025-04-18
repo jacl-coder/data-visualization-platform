@@ -40,6 +40,11 @@ const dateRange = ref([
   new Date(viewStateStore.detailsViewState.dateRange[1] || Date.now())
 ])
 
+// 日期选择器的禁用日期函数 - 不能选择超过今天的日期
+const disabledDate = (time: Date) => {
+  return time.getTime() > Date.now();
+}
+
 // 数据加载状态
 const loadingCountry = ref(false)
 const loadingDevice = ref(false)
@@ -995,6 +1000,7 @@ onBeforeUnmount(() => {
               unlink-panels
               @change="handleDateRangeChange"
               class="date-picker-shorter"
+              :disabled-date="disabledDate"
             />
           </div>
           
@@ -1054,6 +1060,7 @@ onBeforeUnmount(() => {
               unlink-panels
               @change="handleDateRangeChange"
               class="date-picker-shorter"
+              :disabled-date="disabledDate"
             />
           </div>
           
@@ -1114,6 +1121,7 @@ onBeforeUnmount(() => {
             unlink-panels
             @change="handleDateRangeChange"
             class="date-picker-shorter"
+            :disabled-date="disabledDate"
           />
         </div>
         
@@ -1135,6 +1143,7 @@ onBeforeUnmount(() => {
             unlink-panels
             @change="handleDateRangeChange"
             class="date-picker-shorter"
+            :disabled-date="disabledDate"
           />
         </div>
         

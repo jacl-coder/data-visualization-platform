@@ -89,4 +89,11 @@ private:
      * 返回指定日期的详细数据
      */
     void registerDetailsApi();
+
+    /**
+     * 注册LTV API
+     * 返回用户生命周期价值(LTV)数据
+     * 支持按时间窗口和维度查询
+     */
+    void registerLtvApi();
 }; 

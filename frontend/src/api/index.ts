@@ -163,6 +163,64 @@ export interface DetailsData {
   devices: { device: string; users: number }[]
 }
 
+// LTV概览数据类型
+export interface LtvOverviewData {
+  avg_ltv_1d: number
+  avg_ltv_7d: number
+  avg_ltv_14d: number
+  avg_ltv_30d: number
+  avg_ltv_60d: number
+  avg_ltv_90d: number
+  avg_ltv_total: number
+  total_ltv: number
+  user_count: number
+  avg_purchases: number
+}
+
+// LTV数据项类型（按用户）
+export interface LtvUserItem {
+  appsflyer_id: string
+  first_purchase_date: string
+  ltv_1d: number
+  ltv_7d: number
+  ltv_14d: number
+  ltv_30d: number
+  ltv_60d: number
+  ltv_90d: number
+  ltv_total: number
+  purchase_count: number
+}
+
+// LTV数据项类型（按国家分组）
+export interface LtvCountryItem {
+  country: string
+  user_count: number
+  ltv_value: number
+}
+
+// LTV数据项类型（按设备分组）
+export interface LtvDeviceItem {
+  device: string
+  user_count: number
+  ltv_value: number
+}
+
+// LTV数据项类型（按日期分组）
+export interface LtvDateItem {
+  date: string
+  user_count: number
+  avg_ltv: number
+  total_ltv: number
+}
+
+// LTV数据响应类型（泛型）
+export interface LtvResponse<T> {
+  items: T[]
+  total: number
+  window: string
+  groupBy: string
+}
+
 /**
  * 统一的API请求函数，带错误处理和缓存机制
  * @param requestFn 请求函数
@@ -345,6 +403,57 @@ export const getDetailsData = async (date: string, loadingState?: { value: boole
 }
 
 /**
+ * 获取LTV概览数据
+ * @param loadingState 可选的加载状态ref
+ */
+export const getLtvOverview = async (loadingState?: { value: boolean }): Promise<ApiResponse<LtvOverviewData> | null> => {
+  if (loadingState) loadingState.value = true;
+  
+  return safeApiCall(
+    async () => {
+      const response = await apiClient.get<ApiResponse<LtvOverviewData>>('/api/ltv/overview')
+      return response.data
+    },
+    'ltv_overview',
+    300000, // 5分钟缓存
+    loadingState,
+    'LTV概览数据获取失败'
+  )
+}
+
+/**
+ * 获取LTV详细数据
+ * @param groupBy 分组方式: country/device/date/undefined(默认按用户返回)
+ * @param window 时间窗口: 1d/7d/14d/30d/60d/90d/total
+ * @param loadingState 可选的加载状态ref
+ */
+export const getLtvData = async <T>(
+  groupBy?: string,
+  window: string = 'total',
+  loadingState?: { value: boolean }
+): Promise<ApiResponse<LtvResponse<T>> | null> => {
+  if (loadingState) loadingState.value = true;
+  
+  const queryParams = new URLSearchParams();
+  if (groupBy) queryParams.append('groupBy', groupBy);
+  if (window) queryParams.append('window', window);
+  
+  const url = `/api/ltv?${queryParams.toString()}`;
+  const cacheKey = `ltv_${groupBy || 'user'}_${window}`;
+  
+  return safeApiCall(
+    async () => {
+      const response = await apiClient.get<ApiResponse<LtvResponse<T>>>(url);
+      return response.data;
+    },
+    cacheKey,
+    300000, // 5分钟缓存
+    loadingState,
+    'LTV数据获取失败'
+  );
+}
+
+/**
  * 清除API缓存
  * @param key 可选，指定缓存键，如果不提供则清除所有缓存
  */
@@ -359,6 +468,8 @@ export default {
   getCountryData,
   getDeviceData,
   getDetailsData,
+  getLtvOverview,
+  getLtvData,
   clearApiCache,
   safeApiCall
 } 

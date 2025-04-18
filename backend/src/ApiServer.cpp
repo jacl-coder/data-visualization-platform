@@ -83,6 +83,7 @@ void ApiServer::setupRoutes() {
     registerCountryApi();
     registerDeviceApi();
     registerDetailsApi();
+    registerLtvApi();  // 添加LTV API路由
 
     app.route_dynamic("/api/(.*)")
     .methods("OPTIONS"_method)
@@ -465,6 +466,263 @@ void ApiServer::registerDetailsApi() {
             // 使用统一的响应格式
             crow::response res;
             res.body = createSuccessResponse(data, "日期详情数据获取成功").dump();
+            res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
+            return res;
+        } catch (const std::exception& e) {
+            crow::response res;
+            res.code = 500;
+            res.body = createErrorResponse(500, e.what()).dump();
+            res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
+            return res;
+        }
+    });
+}
+
+void ApiServer::registerLtvApi() {
+    app.route_dynamic("/api/ltv")
+    ([this](const crow::request& req) {
+        try {
+            // 基础查询
+            std::string baseQuery = 
+                "SELECT u.appsflyer_id, u.first_purchase_date, "
+                "u.ltv_1d, u.ltv_7d, u.ltv_14d, u.ltv_30d, "
+                "u.ltv_60d, u.ltv_90d, u.ltv_total, u.purchase_count ";
+            
+            // 默认FROM子句
+            std::string fromClause = "FROM user_ltv u ";
+            
+            // 默认条件
+            std::string whereClause = "";
+            std::vector<std::string> params;
+            
+            // 分组参数处理
+            std::string groupBy = req.url_params.get("groupBy") != nullptr ? 
+                req.url_params.get("groupBy") : "";
+            
+            // 时间窗口参数处理
+            std::string window = req.url_params.get("window") != nullptr ? 
+                req.url_params.get("window") : "total";
+            
+            // 根据分组参数修改查询
+            std::string groupByClause = "";
+            if (groupBy == "country") {
+                // 按国家分组
+                baseQuery = 
+                    "SELECT e.country_code as country, "
+                    "COUNT(DISTINCT u.appsflyer_id) as user_count, "
+                    "SUM(u." + (window == "total" ? "ltv_total" : "ltv_" + window) + ") as ltv_value ";
+                fromClause = 
+                    "FROM user_ltv u "
+                    "JOIN users e ON u.appsflyer_id = e.appsflyer_id ";
+                
+                // 添加分组子句
+                whereClause += (whereClause.empty() ? " WHERE " : " AND ");
+                whereClause += "e.country_code IS NOT NULL ";
+                groupByClause = " GROUP BY e.country_code ORDER BY ltv_value DESC";
+            } 
+            else if (groupBy == "device") {
+                // 按设备分组
+                baseQuery = 
+                    "SELECT e.device_category as device, "
+                    "COUNT(DISTINCT u.appsflyer_id) as user_count, "
+                    "SUM(u." + (window == "total" ? "ltv_total" : "ltv_" + window) + ") as ltv_value ";
+                fromClause = 
+                    "FROM user_ltv u "
+                    "JOIN users e ON u.appsflyer_id = e.appsflyer_id ";
+                
+                // 添加分组子句
+                whereClause += (whereClause.empty() ? " WHERE " : " AND ");
+                whereClause += "e.device_category IS NOT NULL ";
+                groupByClause = " GROUP BY e.device_category ORDER BY ltv_value DESC";
+            }
+            else if (groupBy == "date") {
+                // 按首次购买日期分组
+                baseQuery = 
+                    "SELECT u.first_purchase_date as date, "
+                    "COUNT(DISTINCT u.appsflyer_id) as user_count, "
+                    "AVG(u." + (window == "total" ? "ltv_total" : "ltv_" + window) + ") as avg_ltv, "
+                    "SUM(u." + (window == "total" ? "ltv_total" : "ltv_" + window) + ") as total_ltv ";
+                fromClause = "FROM user_ltv u ";
+                groupByClause = " GROUP BY u.first_purchase_date ORDER BY u.first_purchase_date DESC";
+            }
+            
+            // 构建完整的SQL查询
+            std::string sql = baseQuery + fromClause + whereClause + groupByClause;
+            
+            // 执行查询
+            auto result = dbManager->executeQuery(sql, params);
+            
+            // 创建响应数据
+            json dataArray = json::array();
+            
+            // 调试信息：记录查询结果的列名和行数
+            std::cout << "LTV API query result rows: " << result.size() << std::endl;
+            if (!result.empty()) {
+                std::cout << "SQL Query: " << sql << std::endl;
+                std::cout << "Columns in first row: ";
+                for (const auto& pair : result[0]) {
+                    std::cout << pair.first << ", ";
+                }
+                std::cout << std::endl;
+            }
+            
+            // 根据分组类型处理结果
+            if (groupBy == "country") {
+                for (const auto& row : result) {
+                    json item;
+                    // 使用安全的方式访问列值，避免抛出异常
+                    auto countryIt = row.find("country");
+                    auto userCountIt = row.find("user_count");
+                    auto ltvValueIt = row.find("ltv_value");
+                    
+                    if (countryIt != row.end() && userCountIt != row.end() && ltvValueIt != row.end()) {
+                        item["country"] = countryIt->second;
+                        item["user_count"] = std::stoi(userCountIt->second);
+                        item["ltv_value"] = std::stod(ltvValueIt->second);
+                        dataArray.push_back(item);
+                    } else {
+                        std::cerr << "Missing columns in country LTV result" << std::endl;
+                    }
+                }
+            } 
+            else if (groupBy == "device") {
+                for (const auto& row : result) {
+                    json item;
+                    // 使用安全的方式访问列值，避免抛出异常
+                    auto deviceIt = row.find("device");
+                    auto userCountIt = row.find("user_count");
+                    auto ltvValueIt = row.find("ltv_value");
+                    
+                    if (deviceIt != row.end() && userCountIt != row.end() && ltvValueIt != row.end()) {
+                        item["device"] = deviceIt->second;
+                        item["user_count"] = std::stoi(userCountIt->second);
+                        item["ltv_value"] = std::stod(ltvValueIt->second);
+                        dataArray.push_back(item);
+                    } else {
+                        std::cerr << "Missing columns in device LTV result" << std::endl;
+                    }
+                }
+            }
+            else if (groupBy == "date") {
+                for (const auto& row : result) {
+                    json item;
+                    // 使用安全的方式访问列值，避免抛出异常
+                    auto dateIt = row.find("date");
+                    auto userCountIt = row.find("user_count");
+                    auto avgLtvIt = row.find("avg_ltv");
+                    auto totalLtvIt = row.find("total_ltv");
+                    
+                    if (dateIt != row.end() && userCountIt != row.end() && 
+                        avgLtvIt != row.end() && totalLtvIt != row.end()) {
+                        item["date"] = dateIt->second;
+                        item["user_count"] = std::stoi(userCountIt->second);
+                        item["avg_ltv"] = std::stod(avgLtvIt->second);
+                        item["total_ltv"] = std::stod(totalLtvIt->second);
+                        dataArray.push_back(item);
+                    } else {
+                        std::cerr << "Missing columns in date LTV result" << std::endl;
+                    }
+                }
+            }
+            else {
+                // 不分组，返回所有用户的LTV数据
+                for (const auto& row : result) {
+                    json item;
+                    
+                    // 使用更安全的方式获取列值
+                    auto getValueSafe = [&row](const std::string& key, const std::string& defaultVal = "0") -> std::string {
+                        auto it = row.find(key);
+                        return (it != row.end() && !it->second.empty()) ? it->second : defaultVal;
+                    };
+                    
+                    item["appsflyer_id"] = getValueSafe("appsflyer_id", "");
+                    item["first_purchase_date"] = getValueSafe("first_purchase_date", "");
+                    item["ltv_1d"] = std::stod(getValueSafe("ltv_1d"));
+                    item["ltv_7d"] = std::stod(getValueSafe("ltv_7d"));
+                    item["ltv_14d"] = std::stod(getValueSafe("ltv_14d"));
+                    item["ltv_30d"] = std::stod(getValueSafe("ltv_30d"));
+                    item["ltv_60d"] = std::stod(getValueSafe("ltv_60d"));
+                    item["ltv_90d"] = std::stod(getValueSafe("ltv_90d"));
+                    item["ltv_total"] = std::stod(getValueSafe("ltv_total"));
+                    item["purchase_count"] = std::stoi(getValueSafe("purchase_count"));
+                    dataArray.push_back(item);
+                }
+            }
+            
+            // 创建包含元数据的响应
+            json responseData;
+            responseData["items"] = dataArray;
+            responseData["total"] = dataArray.size();
+            responseData["window"] = window;
+            responseData["groupBy"] = groupBy;
+            
+            // 使用统一的响应格式
+            crow::response res;
+            res.body = createSuccessResponse(responseData, "LTV数据获取成功").dump();
+            res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
+            return res;
+        } catch (const std::exception& e) {
+            // 记录详细的错误信息
+            std::cerr << "LTV API error: " << e.what() << std::endl;
+            crow::response res;
+            res.code = 500;
+            res.body = createErrorResponse(500, e.what()).dump();
+            res.set_header("Content-Type", "application/json");
+            // 添加CORS头
+            addCorsHeaders(res);
+            return res;
+        }
+    });
+    
+    // 添加LTV概览API
+    app.route_dynamic("/api/ltv/overview")
+    ([this](const crow::request& req) {
+        try {
+            // 获取LTV统计信息
+            auto result = dbManager->executeQuery(
+                "SELECT "
+                "AVG(ltv_1d) as avg_ltv_1d, "
+                "AVG(ltv_7d) as avg_ltv_7d, "
+                "AVG(ltv_14d) as avg_ltv_14d, "
+                "AVG(ltv_30d) as avg_ltv_30d, "
+                "AVG(ltv_60d) as avg_ltv_60d, "
+                "AVG(ltv_90d) as avg_ltv_90d, "
+                "AVG(ltv_total) as avg_ltv_total, "
+                "SUM(ltv_total) as total_ltv, "
+                "COUNT(*) as user_count, "
+                "AVG(purchase_count) as avg_purchases "
+                "FROM user_ltv",
+                {}
+            );
+            
+            if (result.empty()) {
+                throw std::runtime_error("No LTV data available");
+            }
+            
+            // 创建概览响应
+            json overview;
+            const auto& row = result[0];
+            
+            overview["avg_ltv_1d"] = std::stod(row.at("avg_ltv_1d"));
+            overview["avg_ltv_7d"] = std::stod(row.at("avg_ltv_7d"));
+            overview["avg_ltv_14d"] = std::stod(row.at("avg_ltv_14d"));
+            overview["avg_ltv_30d"] = std::stod(row.at("avg_ltv_30d"));
+            overview["avg_ltv_60d"] = std::stod(row.at("avg_ltv_60d"));
+            overview["avg_ltv_90d"] = std::stod(row.at("avg_ltv_90d"));
+            overview["avg_ltv_total"] = std::stod(row.at("avg_ltv_total"));
+            overview["total_ltv"] = std::stod(row.at("total_ltv"));
+            overview["user_count"] = std::stoi(row.at("user_count"));
+            overview["avg_purchases"] = std::stod(row.at("avg_purchases"));
+            
+            // 使用统一的响应格式
+            crow::response res;
+            res.body = createSuccessResponse(overview, "LTV概览数据获取成功").dump();
             res.set_header("Content-Type", "application/json");
             // 添加CORS头
             addCorsHeaders(res);

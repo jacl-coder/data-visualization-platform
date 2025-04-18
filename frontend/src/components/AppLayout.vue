@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Fold, Expand, DataAnalysis, Document } from '@element-plus/icons-vue'
+import { Fold, Expand, DataAnalysis, Document, Money } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -9,7 +9,8 @@ const route = useRoute()
 // 导航菜单项
 const navItems = [
   { name: '数据概览', path: '/', icon: 'DataAnalysis' },
-  { name: '详情数据', path: '/details', icon: 'Document' }
+  { name: '详情数据', path: '/details', icon: 'Document' },
+  { name: '用户价值分析', path: '/ltv', icon: 'Money' }
 ]
 
 // 是否折叠侧边栏

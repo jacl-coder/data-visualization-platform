@@ -10,6 +10,10 @@ interface DetailsViewState {
   dateRange: string[];
 }
 
+interface LtvViewState {
+  window: string;
+}
+
 /**
  * 视图状态存储 - 用于保存视图之间的状态
  * 注意：这个存储会自动持久化，通过 pinia-plugin-persistedstate 插件
@@ -29,6 +33,11 @@ export const useViewStateStore = defineStore('viewState', () => {
     ]
   })
 
+  // LtvView 状态
+  const ltvViewState = ref<LtvViewState>({
+    window: 'total' // 默认显示总计
+  })
+
   // 更新 HomeView 状态
   const updateHomeViewState = (state: Partial<HomeViewState>) => {
     homeViewState.value = { ...homeViewState.value, ...state }
@@ -39,10 +48,17 @@ export const useViewStateStore = defineStore('viewState', () => {
     detailsViewState.value = { ...detailsViewState.value, ...state }
   }
 
+  // 更新 LtvView 状态
+  const updateLtvViewState = (state: Partial<LtvViewState>) => {
+    ltvViewState.value = { ...ltvViewState.value, ...state }
+  }
+
   return {
     homeViewState,
     detailsViewState,
+    ltvViewState,
     updateHomeViewState,
-    updateDetailsViewState
+    updateDetailsViewState,
+    updateLtvViewState
   }
 }) 

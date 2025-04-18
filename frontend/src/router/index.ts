@@ -19,6 +19,14 @@ const router = createRouter({
         title: '详情数据'
       }
     },
+    {
+      path: '/ltv',
+      name: 'ltv',
+      component: () => import('../views/LtvView.vue'),
+      meta: {
+        title: '用户价值分析'
+      }
+    },
     // 重定向未匹配的路由到首页
     {
       path: '/:pathMatch(.*)*',
