@@ -153,10 +153,10 @@ function check_dependencies() {
 function install_python_deps() {
     echo -e "${BLUE}[2/6] 安装Python依赖...${NC}"
     
-    cd "$PROJECT_DIR"
+    cd "$DATA_PROCESSING_DIR"
     
     if [ ! -f "requirements.txt" ]; then
-        echo -e "${RED}错误: 未找到requirements.txt文件${NC}"
+        echo -e "${RED}错误: 未找到data_processing/requirements.txt文件${NC}"
         exit 1
     fi
     
@@ -166,12 +166,6 @@ function install_python_deps() {
     if [ $? -ne 0 ]; then
         echo -e "${RED}错误: Python依赖安装失败${NC}"
         exit 1
-    fi
-    
-    # 复制requirements.txt到数据处理目录，确保兼容性
-    if [ -d "$DATA_PROCESSING_DIR" ] && [ ! -f "$DATA_PROCESSING_DIR/requirements.txt" ]; then
-        echo -e "  - 复制requirements.txt到数据处理目录..."
-        cp "$PROJECT_DIR/requirements.txt" "$DATA_PROCESSING_DIR/"
     fi
     
     echo -e "${GREEN}Python依赖安装完成!${NC}"
