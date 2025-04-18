@@ -47,15 +47,47 @@ function print_welcome() {
     echo
 }
 
-# 检查系统依赖
+# 检查并安装依赖
 function check_dependencies() {
     echo -e "${BLUE}[1/6] 检查系统环境和必要依赖...${NC}"
     
+    # 检测操作系统类型
+    OS_TYPE=""
+    if [ -f /etc/debian_version ]; then
+        OS_TYPE="debian"
+        echo -e "  - 检测到 Debian/Ubuntu 系统"
+    elif [ -f /etc/redhat-release ]; then
+        OS_TYPE="redhat"
+        echo -e "  - 检测到 CentOS/RHEL/Fedora 系统"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        OS_TYPE="mac"
+        echo -e "  - 检测到 macOS 系统"
+    else
+        echo -e "${YELLOW}警告: 未能确定操作系统类型，可能无法自动安装依赖${NC}"
+    fi
+    
     # 检查Python
     if ! command -v python3 &> /dev/null; then
-        echo -e "${RED}错误: 未找到Python 3${NC}"
-        echo -e "请安装Python 3.9或更高版本后重试"
-        exit 1
+        echo -e "${YELLOW}未找到Python 3，尝试自动安装...${NC}"
+        if [ "$OS_TYPE" == "debian" ]; then
+            sudo apt-get update && sudo apt-get install -y python3 python3-dev
+        elif [ "$OS_TYPE" == "redhat" ]; then
+            sudo yum install -y python3 python3-devel
+        elif [ "$OS_TYPE" == "mac" ]; then
+            brew install python
+        else
+            echo -e "${RED}错误: 未找到Python 3${NC}"
+            echo -e "请手动安装Python 3.9或更高版本后重试"
+            exit 1
+        fi
+        
+        # 再次检查是否已安装
+        if ! command -v python3 &> /dev/null; then
+            echo -e "${RED}错误: Python 3安装失败${NC}"
+            exit 1
+        else
+            echo -e "${GREEN}Python 3安装成功!${NC}"
+        fi
     fi
     
     PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
@@ -67,17 +99,55 @@ function check_dependencies() {
     
     # 检查pip
     if ! command -v pip3 &> /dev/null; then
-        echo -e "${RED}错误: 未找到pip3${NC}"
-        echo -e "请安装pip后重试"
-        exit 1
+        echo -e "${YELLOW}未找到pip3，尝试自动安装...${NC}"
+        if [ "$OS_TYPE" == "debian" ]; then
+            sudo apt-get update && sudo apt-get install -y python3-pip
+        elif [ "$OS_TYPE" == "redhat" ]; then
+            sudo yum install -y python3-pip
+        elif [ "$OS_TYPE" == "mac" ]; then
+            curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+            python3 get-pip.py
+            rm get-pip.py
+        else
+            echo -e "${RED}错误: 未找到pip3${NC}"
+            echo -e "请手动安装pip后重试"
+            exit 1
+        fi
+        
+        # 再次检查是否已安装
+        if ! command -v pip3 &> /dev/null; then
+            echo -e "${RED}错误: pip3安装失败${NC}"
+            exit 1
+        else
+            echo -e "${GREEN}pip3安装成功!${NC}"
+        fi
     fi
     echo -e "  - 检测到pip: ${GREEN}$(pip3 --version | awk '{print $2}')${NC}"
     
     # 检查Node.js
     if ! command -v node &> /dev/null; then
-        echo -e "${RED}错误: 未找到Node.js${NC}"
-        echo -e "请安装Node.js $REQUIRED_NODE_VERSION 或更高版本后重试"
-        exit 1
+        echo -e "${YELLOW}未找到Node.js，尝试自动安装...${NC}"
+        if [ "$OS_TYPE" == "debian" ]; then
+            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+        elif [ "$OS_TYPE" == "redhat" ]; then
+            curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
+            sudo yum install -y nodejs
+        elif [ "$OS_TYPE" == "mac" ]; then
+            brew install node
+        else
+            echo -e "${RED}错误: 未找到Node.js${NC}"
+            echo -e "请手动安装Node.js $REQUIRED_NODE_VERSION 或更高版本后重试"
+            exit 1
+        fi
+        
+        # 再次检查是否已安装
+        if ! command -v node &> /dev/null; then
+            echo -e "${RED}错误: Node.js安装失败${NC}"
+            exit 1
+        else
+            echo -e "${GREEN}Node.js安装成功!${NC}"
+        fi
     fi
     
     NODE_VERSION=$(node -v | cut -d 'v' -f 2)
@@ -89,9 +159,26 @@ function check_dependencies() {
     
     # 检查npm
     if ! command -v npm &> /dev/null; then
-        echo -e "${RED}错误: 未找到npm${NC}"
-        echo -e "请安装npm后重试"
-        exit 1
+        echo -e "${YELLOW}未找到npm，尝试自动安装...${NC}"
+        if [ "$OS_TYPE" == "debian" ]; then
+            sudo apt-get update && sudo apt-get install -y npm
+        elif [ "$OS_TYPE" == "redhat" ]; then
+            sudo yum install -y npm
+        elif [ "$OS_TYPE" == "mac" ]; then
+            brew install npm
+        else
+            echo -e "${RED}错误: 未找到npm${NC}"
+            echo -e "请手动安装npm后重试"
+            exit 1
+        fi
+        
+        # 再次检查是否已安装
+        if ! command -v npm &> /dev/null; then
+            echo -e "${RED}错误: npm安装失败${NC}"
+            exit 1
+        else
+            echo -e "${GREEN}npm安装成功!${NC}"
+        fi
     fi
     
     NPM_VERSION=$(npm -v)
@@ -103,9 +190,33 @@ function check_dependencies() {
     
     # 检查C++编译器
     if ! command -v g++ &> /dev/null; then
-        echo -e "${RED}错误: 未找到C++编译器${NC}"
-        echo -e "请安装g++或其他C++编译器后重试"
-        exit 1
+        echo -e "${YELLOW}未找到C++编译器，尝试自动安装...${NC}"
+        if [ "$OS_TYPE" == "debian" ]; then
+            sudo apt-get update && sudo apt-get install -y build-essential
+        elif [ "$OS_TYPE" == "redhat" ]; then
+            sudo yum install -y gcc-c++ make
+        elif [ "$OS_TYPE" == "mac" ]; then
+            xcode-select --install
+            # 等待Xcode CLI工具安装完成
+            echo -e "${YELLOW}正在安装Xcode命令行工具，请在弹出窗口中确认安装，然后等待安装完成...${NC}"
+            sleep 5
+            while ! command -v g++ &> /dev/null; do
+                sleep 5
+                echo -e "  - 等待安装完成..."
+            done
+        else
+            echo -e "${RED}错误: 未找到C++编译器${NC}"
+            echo -e "请手动安装g++或其他C++编译器后重试"
+            exit 1
+        fi
+        
+        # 再次检查是否已安装
+        if ! command -v g++ &> /dev/null; then
+            echo -e "${RED}错误: C++编译器安装失败${NC}"
+            exit 1
+        else
+            echo -e "${GREEN}C++编译器安装成功!${NC}"
+        fi
     fi
     
     GCC_VERSION=$(g++ --version | head -n1 | awk '{print $NF}')
@@ -113,9 +224,26 @@ function check_dependencies() {
     
     # 检查CMake
     if ! command -v cmake &> /dev/null; then
-        echo -e "${RED}错误: 未找到cmake${NC}"
-        echo -e "请安装cmake $REQUIRED_CMAKE_VERSION 或更高版本后重试"
-        exit 1
+        echo -e "${YELLOW}未找到cmake，尝试自动安装...${NC}"
+        if [ "$OS_TYPE" == "debian" ]; then
+            sudo apt-get update && sudo apt-get install -y cmake
+        elif [ "$OS_TYPE" == "redhat" ]; then
+            sudo yum install -y cmake
+        elif [ "$OS_TYPE" == "mac" ]; then
+            brew install cmake
+        else
+            echo -e "${RED}错误: 未找到cmake${NC}"
+            echo -e "请手动安装cmake $REQUIRED_CMAKE_VERSION 或更高版本后重试"
+            exit 1
+        fi
+        
+        # 再次检查是否已安装
+        if ! command -v cmake &> /dev/null; then
+            echo -e "${RED}错误: cmake安装失败${NC}"
+            exit 1
+        else
+            echo -e "${GREEN}cmake安装成功!${NC}"
+        fi
     fi
     
     CMAKE_VERSION=$(cmake --version | head -n1 | awk '{print $3}')
@@ -127,9 +255,26 @@ function check_dependencies() {
     
     # 检查SQLite
     if ! command -v sqlite3 &> /dev/null; then
-        echo -e "${RED}错误: 未找到sqlite3${NC}"
-        echo -e "请安装sqlite3后重试"
-        exit 1
+        echo -e "${YELLOW}未找到sqlite3，尝试自动安装...${NC}"
+        if [ "$OS_TYPE" == "debian" ]; then
+            sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
+        elif [ "$OS_TYPE" == "redhat" ]; then
+            sudo yum install -y sqlite sqlite-devel
+        elif [ "$OS_TYPE" == "mac" ]; then
+            brew install sqlite
+        else
+            echo -e "${RED}错误: 未找到sqlite3${NC}"
+            echo -e "请手动安装sqlite3后重试"
+            exit 1
+        fi
+        
+        # 再次检查是否已安装
+        if ! command -v sqlite3 &> /dev/null; then
+            echo -e "${RED}错误: sqlite3安装失败${NC}"
+            exit 1
+        else
+            echo -e "${GREEN}sqlite3安装成功!${NC}"
+        fi
     fi
     
     SQLITE_VERSION=$(sqlite3 --version | awk '{print $1}')
@@ -142,7 +287,18 @@ function check_dependencies() {
         OPEN_CMD="open"
     else
         OPEN_CMD=""
-        echo -e "${YELLOW}警告: 未找到xdg-open或open命令, 将无法自动打开浏览器${NC}"
+        if [ "$OS_TYPE" == "debian" ]; then
+            echo -e "${YELLOW}未找到xdg-open命令，尝试安装...${NC}"
+            sudo apt-get update && sudo apt-get install -y xdg-utils
+            if command -v xdg-open &> /dev/null; then
+                OPEN_CMD="xdg-open"
+                echo -e "${GREEN}xdg-open安装成功!${NC}"
+            else
+                echo -e "${YELLOW}警告: xdg-open安装失败, 将无法自动打开浏览器${NC}"
+            fi
+        else
+            echo -e "${YELLOW}警告: 未找到xdg-open或open命令, 将无法自动打开浏览器${NC}"
+        fi
     fi
     
     echo -e "${GREEN}系统环境检查完成!${NC}"

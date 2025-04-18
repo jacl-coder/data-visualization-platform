@@ -162,7 +162,7 @@ data-visualization-platform/
 
 1. 克隆仓库
 ```bash
-git clone https://github.com/yourusername/data-visualization-platform.git
+git clone https://github.com/jacl-coder/data-visualization-platform.git
 cd data-visualization-platform
 ```
 
@@ -215,6 +215,8 @@ chmod +x scripts/setup.sh
 - 打开浏览器访问应用
 
 运行后，按 Ctrl+C 可以停止所有服务并清理资源。
+
+> **注意**：setup.sh脚本已支持在Debian/Ubuntu、CentOS/RHEL/Fedora和macOS系统上自动安装缺少的依赖，如Python、Node.js、C++编译器等。自动安装需要管理员权限（sudo）。如果您的系统不支持自动安装，脚本将提示您手动安装所需依赖。
 
 ### 数据处理详解
 
