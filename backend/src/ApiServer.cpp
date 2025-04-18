@@ -165,19 +165,48 @@ void ApiServer::registerTimelineApi() {
     app.route_dynamic("/api/timeline")
     ([this](const crow::request& req) {
         try {
-            // 默认获取30天数据
-            int days = 30;
+            std::string whereClause = "";
+            std::vector<std::string> params;
+            std::string limitClause = "";
             
-            if (req.url_params.get("days") != nullptr) {
-                days = std::stoi(req.url_params.get("days"));
+            // 检查是否有日期范围参数
+            if (req.url_params.get("dateRange") != nullptr) {
+                std::string dateParam = req.url_params.get("dateRange");
+                
+                // 检查是否是日期范围查询（格式：startDate|endDate）
+                size_t separatorPos = dateParam.find('|');
+                if (separatorPos != std::string::npos) {
+                    // 日期范围查询
+                    std::string startDate = dateParam.substr(0, separatorPos);
+                    std::string endDate = dateParam.substr(separatorPos + 1);
+                    
+                    whereClause = " WHERE stat_date BETWEEN ? AND ? ";
+                    params.push_back(startDate);
+                    params.push_back(endDate);
+                    
+                    // 不使用LIMIT子句
+                    limitClause = "";
+                }
+            } else {
+                // 兼容旧的days参数
+                int days = 30;
+                if (req.url_params.get("days") != nullptr) {
+                    days = std::stoi(req.url_params.get("days"));
+                }
+                
+                // 使用LIMIT子句
+                limitClause = " LIMIT ?";
+                params.push_back(std::to_string(days));
             }
             
             // 查询每日数据
             auto result = dbManager->executeQuery(
                 "SELECT stat_date, user_count, event_count, revenue_usd, device_count "
-                "FROM daily_stats "
-                "ORDER BY stat_date DESC LIMIT ?"
-                ,{std::to_string(days)}
+                "FROM daily_stats " +
+                whereClause +
+                "ORDER BY stat_date DESC" +
+                limitClause,
+                params
             );
             
             // 创建数据数组
@@ -218,15 +247,41 @@ void ApiServer::registerTimelineApi() {
 
 void ApiServer::registerCountryApi() {
     app.route_dynamic("/api/country")
-    ([this](const crow::request&) {
+    ([this](const crow::request& req) {
         try {
-            // 查询各国家数据
+            std::string whereClause = "";
+            std::vector<std::string> params;
+            
+            // 检查是否有日期参数
+            if (req.url_params.get("date") != nullptr) {
+                std::string dateParam = req.url_params.get("date");
+                
+                // 检查是否是日期范围查询（格式：startDate|endDate）
+                size_t separatorPos = dateParam.find('|');
+                if (separatorPos != std::string::npos) {
+                    // 日期范围查询
+                    std::string startDate = dateParam.substr(0, separatorPos);
+                    std::string endDate = dateParam.substr(separatorPos + 1);
+                    
+                    whereClause = " WHERE stat_date BETWEEN ? AND ? ";
+                    params.push_back(startDate);
+                    params.push_back(endDate);
+                } else {
+                    // 单一日期查询
+                    whereClause = " WHERE stat_date = ? ";
+                    params.push_back(dateParam);
+                }
+            }
+            
+            // 查询各国家数据，使用日期参数
             auto result = dbManager->executeQuery(
                 "SELECT country_code, SUM(user_count) as total_users, "
                 "SUM(revenue_usd) as total_revenue "
-                "FROM country_stats "
+                "FROM country_stats " +
+                whereClause +
                 "GROUP BY country_code "
-                "ORDER BY total_revenue DESC"
+                "ORDER BY total_revenue DESC",
+                params
             );
             
             // 创建数据数组
@@ -265,15 +320,41 @@ void ApiServer::registerCountryApi() {
 
 void ApiServer::registerDeviceApi() {
     app.route_dynamic("/api/device")
-    ([this](const crow::request&) {
+    ([this](const crow::request& req) {
         try {
-            // 查询各设备数据
+            std::string whereClause = "";
+            std::vector<std::string> params;
+            
+            // 检查是否有日期参数
+            if (req.url_params.get("date") != nullptr) {
+                std::string dateParam = req.url_params.get("date");
+                
+                // 检查是否是日期范围查询（格式：startDate|endDate）
+                size_t separatorPos = dateParam.find('|');
+                if (separatorPos != std::string::npos) {
+                    // 日期范围查询
+                    std::string startDate = dateParam.substr(0, separatorPos);
+                    std::string endDate = dateParam.substr(separatorPos + 1);
+                    
+                    whereClause = " WHERE stat_date BETWEEN ? AND ? ";
+                    params.push_back(startDate);
+                    params.push_back(endDate);
+                } else {
+                    // 单一日期查询
+                    whereClause = " WHERE stat_date = ? ";
+                    params.push_back(dateParam);
+                }
+            }
+            
+            // 查询各设备数据，使用日期参数
             auto result = dbManager->executeQuery(
                 "SELECT device_category, SUM(user_count) as total_users, "
                 "SUM(revenue_usd) as total_revenue "
-                "FROM device_stats "
+                "FROM device_stats " +
+                whereClause +
                 "GROUP BY device_category "
-                "ORDER BY total_revenue DESC"
+                "ORDER BY total_revenue DESC",
+                params
             );
             
             // 创建数据数组

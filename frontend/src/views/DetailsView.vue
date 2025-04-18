@@ -2,12 +2,14 @@
 import { ref, onMounted, computed, watch, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts/core'
-import { PieChart, LineChart } from 'echarts/charts'
+import { PieChart, LineChart, BarChart } from 'echarts/charts'
 import {
   TitleComponent,
   TooltipComponent,
   LegendComponent,
-  GridComponent
+  GridComponent,
+  ToolboxComponent,
+  DataZoomComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import AppLayout from '../components/AppLayout.vue'
@@ -21,8 +23,11 @@ echarts.use([
   TooltipComponent,
   LegendComponent,
   GridComponent,
+  ToolboxComponent,
+  DataZoomComponent,
   PieChart,
   LineChart,
+  BarChart,
   CanvasRenderer
 ])
 
@@ -92,9 +97,9 @@ const dateRangeShortcuts = [
 ]
 
 // 加载国家数据
-const loadCountryData = async () => {
+const loadCountryData = async (date?: string) => {
   try {
-    const response = await getCountryData(loadingCountry)
+    const response = await getCountryData(date, loadingCountry)
     if (response && response.status === 'success') {
       countryData.value = response.data.items || []
       renderCountryChart()
@@ -113,9 +118,9 @@ const loadCountryData = async () => {
 }
 
 // 加载设备数据
-const loadDeviceData = async () => {
+const loadDeviceData = async (date?: string) => {
   try {
-    const response = await getDeviceData(loadingDevice)
+    const response = await getDeviceData(date, loadingDevice)
     if (response && response.status === 'success') {
       deviceData.value = response.data.items || []
       renderDeviceChart()
@@ -136,14 +141,14 @@ const loadDeviceData = async () => {
 // 加载时间线数据
 const loadTimelineData = async () => {
   try {
-    // 计算日期范围内的天数
-    const start = new Date(dateRange.value[0])
-    const end = new Date(dateRange.value[1])
-    const diffTime = Math.abs(end.getTime() - start.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 *
-    24)) + 1 // 包含开始和结束日期
+    // 获取日期范围
+    const start = formatDate(dateRange.value[0])
+    const end = formatDate(dateRange.value[1])
     
-    const response = await getTimeline(diffDays, loadingTimeline)
+    // 使用日期范围参数加载数据
+    const dateRangeParam = `${start}|${end}`
+    
+    const response = await getTimeline(30, dateRangeParam, loadingTimeline)
     if (response && response.status === 'success') {
       timelineData.value = response.data.items || []
       renderTimelineChart()
@@ -526,11 +531,10 @@ const renderTimelineChart = async () => {
     toolbox: {
       feature: {
         saveAsImage: { title: '保存为图片' },
-        dataZoom: { title: '区域缩放' },
         restore: { title: '还原' }
       },
-      right: 20,
-      top: 0
+      right: 25,
+      bottom: 12
     },
     dataZoom: [
       {
@@ -694,8 +698,12 @@ const handleDateChange = (date: Date) => {
     duration: 0
   })
   
-  // 加载详细数据
-  loadDetailsData(selectedDate.value).then(() => {
+  // 并行加载所有相关数据
+  Promise.all([
+    loadDetailsData(selectedDate.value),
+    loadCountryData(selectedDate.value),  // 也重新加载国家数据
+    loadDeviceData(selectedDate.value)    // 也重新加载设备数据
+  ]).then(() => {
     // 关闭加载提示
     loading.close()
     // 更新标题
@@ -703,6 +711,15 @@ const handleDateChange = (date: Date) => {
       message: `已切换到 ${selectedDate.value} 数据`,
       duration: 1500
     })
+  }).catch(error => {
+    // 关闭加载提示
+    loading.close()
+    // 显示错误提示
+    ElMessage.error({
+      message: '数据加载失败，请重试',
+      duration: 2000
+    })
+    console.error('加载数据失败', error)
   })
 }
 
@@ -713,6 +730,7 @@ const handleDateRangeChange = async (range: [Date, Date]) => {
   dateRange.value = range
   
   // 根据选定的日期范围重新加载数据
+  const startDate = formatDate(range[0])
   const endDate = formatDate(range[1])
   selectedDate.value = endDate
   
@@ -726,7 +744,9 @@ const handleDateRangeChange = async (range: [Date, Date]) => {
     // 并行加载数据以提高效率
     await Promise.all([
       loadTimelineData(),
-      loadDetailsData(selectedDate.value)
+      loadDetailsData(selectedDate.value),
+      loadCountryDataForRange(startDate, endDate),
+      loadDeviceDataForRange(startDate, endDate)
     ])
     
     // 关闭加载提示
@@ -750,10 +770,54 @@ const handleDateRangeChange = async (range: [Date, Date]) => {
   }
 }
 
+// 加载日期范围内的国家数据
+const loadCountryDataForRange = async (startDate: string, endDate: string) => {
+  try {
+    // 使用日期范围参数加载数据
+    const response = await getCountryData(`${startDate}|${endDate}`, loadingCountry)
+    if (response && response.status === 'success') {
+      countryData.value = response.data.items || []
+      renderCountryChart()
+    } else if (response) {
+      ElMessage.warning(response.message || '获取国家数据格式不正确')
+      countryData.value = []
+    } else {
+      countryData.value = []
+    }
+  } catch (error) {
+    console.error('获取国家数据出错', error)
+    ElMessage.error('获取国家数据出错，将显示空列表')
+    countryData.value = []
+  }
+}
+
+// 加载日期范围内的设备数据
+const loadDeviceDataForRange = async (startDate: string, endDate: string) => {
+  try {
+    // 使用日期范围参数加载数据
+    const response = await getDeviceData(`${startDate}|${endDate}`, loadingDevice)
+    if (response && response.status === 'success') {
+      deviceData.value = response.data.items || []
+      renderDeviceChart()
+    } else if (response) {
+      ElMessage.warning(response.message || '获取设备数据格式不正确')
+      deviceData.value = []
+    } else {
+      deviceData.value = []
+    }
+  } catch (error) {
+    console.error('获取设备数据出错', error)
+    ElMessage.error('获取设备数据出错，将显示空列表')
+    deviceData.value = []
+  }
+}
+
 // 加载所有数据
 const loadAllData = () => {
-  loadCountryData()
-  loadDeviceData()
+  const start = formatDate(dateRange.value[0])
+  const end = formatDate(dateRange.value[1])
+  loadCountryDataForRange(start, end)
+  loadDeviceDataForRange(start, end)
   loadTimelineData()
   loadDetailsData(selectedDate.value)
 }
@@ -766,11 +830,15 @@ const handleRefresh = async () => {
   // 清除所有API缓存，确保获取最新数据
   clearApiCache()
   
+  // 获取日期范围
+  const start = formatDate(dateRange.value[0])
+  const end = formatDate(dateRange.value[1])
+  
   // 使用Promise.all并行加载所有数据以提高效率
   try {
     await Promise.all([
-      loadCountryData(),
-      loadDeviceData(),
+      loadCountryDataForRange(start, end),
+      loadDeviceDataForRange(start, end),
       loadTimelineData(),
       loadDetailsData(selectedDate.value)
     ])

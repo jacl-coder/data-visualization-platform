@@ -447,9 +447,9 @@ GET /api/timeline?days=30
   "message": "时间线数据获取成功",
   "data": {
     "items": [
-      {"stat_date": "2025-04-10", "event_count": 1, "revenue_usd": 5.99, "user_count": 1, "device_count": 1},
-      {"stat_date": "2025-04-09", "event_count": 1, "revenue_usd": 5.99, "user_count": 1, "device_count": 1},
-      {"stat_date": "2025-03-28", "event_count": 9, "revenue_usd": 234.91, "user_count": 4, "device_count": 3}
+      {"date": "2025-04-10", "event_count": 1, "revenue": 5.99, "user_count": 1, "device_count": 1},
+      {"date": "2025-04-09", "event_count": 1, "revenue": 5.99, "user_count": 1, "device_count": 1},
+      {"date": "2025-03-28", "event_count": 9, "revenue": 234.91, "user_count": 4, "device_count": 3}
       // 更多日期数据...
     ],
     "total": 30
@@ -460,8 +460,16 @@ GET /api/timeline?days=30
 ### 国家维度数据 (/api/country)
 ```
 GET /api/country
+GET /api/country?date=YYYY-MM-DD
+GET /api/country?date=YYYY-MM-DD|YYYY-MM-DD
 返回按国家分组的统计数据，包括用户数和收入，按收入降序排列。
 ```
+参数:
+- `date`: 可选，指定查询的日期。支持以下格式：
+  - 单一日期：`YYYY-MM-DD`，返回特定日期的数据
+  - 日期范围：`YYYY-MM-DD|YYYY-MM-DD`，返回指定范围内的数据汇总
+  - 不提供时返回所有日期的汇总数据
+
 示例响应：
 ```json
 {
@@ -483,8 +491,16 @@ GET /api/country
 ### 设备维度数据 (/api/device)
 ```
 GET /api/device
+GET /api/device?date=YYYY-MM-DD
+GET /api/device?date=YYYY-MM-DD|YYYY-MM-DD
 返回按设备分组的统计数据，包括用户数和收入，按收入降序排列。
 ```
+参数:
+- `date`: 可选，指定查询的日期。支持以下格式：
+  - 单一日期：`YYYY-MM-DD`，返回特定日期的数据
+  - 日期范围：`YYYY-MM-DD|YYYY-MM-DD`，返回指定范围内的数据汇总
+  - 不提供时返回所有日期的汇总数据
+
 示例响应：
 ```json
 {
@@ -543,6 +559,17 @@ GET /api/details?date=YYYY-MM-DD
   }
 }
 ```
+
+### API响应字段说明
+
+所有API返回的字段名称已经与前端期望的字段类型保持一致：
+
+- `/api/timeline`: 返回包含`date`, `user_count`, `event_count`, `revenue`, `device_count`的数组
+- `/api/country`: 返回包含`country`, `users`, `revenue`的数组
+- `/api/device`: 返回包含`device`, `users`, `revenue`的数组
+- `/api/details`: 返回包含`date`, `total_revenue`, `countries`, `devices`的对象
+
+当查询不存在数据的日期（如数据库中没有记录的日期）时，API会返回空数组或默认值，而不是错误。前端应相应处理这种情况。
 
 ### 跨域资源共享 (CORS) 支持
 所有API端点都支持跨域资源共享，允许从任何源发起请求。支持的HTTP方法包括GET、POST、PUT、DELETE和OPTIONS。响应头中包含以下CORS相关设置：

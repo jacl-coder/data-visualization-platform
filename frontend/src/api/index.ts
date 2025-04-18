@@ -248,59 +248,80 @@ export const getOverview = async (loadingState?: { value: boolean }): Promise<Ap
 /**
  * 获取时间线数据
  * @param days 天数，默认30天
+ * @param dateRange 可选的日期范围，格式为startDate|endDate
  * @param loadingState 可选的加载状态ref
  */
-export const getTimeline = async (days: number = 30, loadingState?: { value: boolean }): Promise<ApiResponse<ListResponse<TimelineItem>> | null> => {
+export const getTimeline = async (
+  days: number = 30, 
+  dateRange?: string,
+  loadingState?: { value: boolean }
+): Promise<ApiResponse<ListResponse<TimelineItem>> | null> => {
   if (loadingState) loadingState.value = true;
+  
+  const cacheKey = dateRange 
+    ? ApiCache.generateKey('/api/timeline', { dateRange })
+    : ApiCache.generateKey('/api/timeline', { days });
   
   return safeApiCall(
     async () => {
-      const response = await apiClient.get<ApiResponse<ListResponse<TimelineItem>>>(`/api/timeline?days=${days}`)
-      return response.data
+      const url = dateRange 
+        ? `/api/timeline?dateRange=${dateRange}`
+        : `/api/timeline?days=${days}`;
+        
+      const response = await apiClient.get<ApiResponse<ListResponse<TimelineItem>>>(url);
+      return response.data;
     },
-    ApiCache.generateKey('/api/timeline', { days }),
+    cacheKey,
     60000, // 1分钟缓存
     loadingState,
     '获取时间线数据失败'
-  )
+  );
 }
 
 /**
  * 获取国家维度数据
+ * @param date 可选的日期参数，格式为YYYY-MM-DD
  * @param loadingState 可选的加载状态ref
  */
-export const getCountryData = async (loadingState?: { value: boolean }): Promise<ApiResponse<ListResponse<CountryItem>> | null> => {
+export const getCountryData = async (date?: string, loadingState?: { value: boolean }): Promise<ApiResponse<ListResponse<CountryItem>> | null> => {
   if (loadingState) loadingState.value = true;
+  
+  const cacheKey = date ? `country_data_${date}` : 'country_data';
   
   return safeApiCall(
     async () => {
-      const response = await apiClient.get<ApiResponse<ListResponse<CountryItem>>>('/api/country')
-      return response.data
+      const url = date ? `/api/country?date=${date}` : '/api/country';
+      const response = await apiClient.get<ApiResponse<ListResponse<CountryItem>>>(url);
+      return response.data;
     },
-    'country_data',
+    cacheKey,
     300000, // 5分钟缓存
     loadingState,
     '获取国家数据失败'
-  )
+  );
 }
 
 /**
  * 获取设备维度数据
+ * @param date 可选的日期参数，格式为YYYY-MM-DD
  * @param loadingState 可选的加载状态ref
  */
-export const getDeviceData = async (loadingState?: { value: boolean }): Promise<ApiResponse<ListResponse<DeviceItem>> | null> => {
+export const getDeviceData = async (date?: string, loadingState?: { value: boolean }): Promise<ApiResponse<ListResponse<DeviceItem>> | null> => {
   if (loadingState) loadingState.value = true;
+  
+  const cacheKey = date ? `device_data_${date}` : 'device_data';
   
   return safeApiCall(
     async () => {
-      const response = await apiClient.get<ApiResponse<ListResponse<DeviceItem>>>('/api/device')
-      return response.data
+      const url = date ? `/api/device?date=${date}` : '/api/device';
+      const response = await apiClient.get<ApiResponse<ListResponse<DeviceItem>>>(url);
+      return response.data;
     },
-    'device_data',
+    cacheKey,
     300000, // 5分钟缓存
     loadingState,
     '获取设备数据失败'
-  )
+  );
 }
 
 /**
