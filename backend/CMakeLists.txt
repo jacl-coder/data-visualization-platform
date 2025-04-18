@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
 project(data_visualization_backend)
 
+# 设置新的CMake策略
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 NEW)
+endif()
+
 # 设置C++标准
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,8 +14,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(SQLite3 REQUIRED)
 include_directories(${SQLite3_INCLUDE_DIRS})
 
-# 查找Boost库 (Crow可能依赖部分Boost库)
-find_package(Boost COMPONENTS system thread)
+# 使用CONFIG模式查找Boost库 (Crow可能依赖部分Boost库)
+find_package(Boost CONFIG COMPONENTS system thread)
 if(Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS})
 endif()
