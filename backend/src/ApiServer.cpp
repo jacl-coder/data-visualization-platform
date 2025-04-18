@@ -174,7 +174,7 @@ void ApiServer::registerTimelineApi() {
             
             // 查询每日数据
             auto result = dbManager->executeQuery(
-                "SELECT stat_date, user_count, event_count, revenue_usd "
+                "SELECT stat_date, user_count, event_count, revenue_usd, device_count "
                 "FROM daily_stats "
                 "ORDER BY stat_date DESC LIMIT ?"
                 ,{std::to_string(days)}
@@ -188,6 +188,7 @@ void ApiServer::registerTimelineApi() {
                 item["user_count"] = std::stoi(row.at("user_count"));
                 item["event_count"] = std::stoi(row.at("event_count"));
                 item["revenue"] = std::stod(row.at("revenue_usd"));
+                item["device_count"] = std::stoi(row.at("device_count"));
                 dataArray.push_back(item);
             }
             

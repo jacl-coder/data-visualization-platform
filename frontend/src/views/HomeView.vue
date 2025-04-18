@@ -149,9 +149,8 @@ const updateCardsBySelectedDate = (date: string) => {
     selectedDateData.event_count = dateData.event_count;
     selectedDateData.revenue = dateData.revenue;
     
-    // 计算当天涉及的设备数量（简化处理，暂设为总体概览的值，或者一个默认值）
-    // 注意：timelineData中没有设备数量的数据，因此保留使用总体概览的数据
-    selectedDateData.device_count = overviewData.device_count;
+    // 使用日期数据中的设备数，而不是概览数据中的总设备数
+    selectedDateData.device_count = dateData.device_count;
     
     // 计算选中日期的同比和环比数据
     
@@ -185,11 +184,11 @@ const updateCardsBySelectedDate = (date: string) => {
     
     // 查找去年同日的数据（精确匹配）
     const lastYearData = timelineData.value.find(item => item.date === lastYearDate) 
-      || { user_count: 0, event_count: 0, revenue: 0 };
+      || { user_count: 0, event_count: 0, revenue: 0, device_count: 0 };
     
     // 查找上月同日的数据（精确匹配）
     const lastMonthData = timelineData.value.find(item => item.date === lastMonthDate)
-      || { user_count: 0, event_count: 0, revenue: 0 };
+      || { user_count: 0, event_count: 0, revenue: 0, device_count: 0 };
     
     console.log(`比较日期: 当前=${date}, 去年同日=${lastYearDate}, 上月同日=${lastMonthDate}`);
     
@@ -212,6 +211,13 @@ const updateCardsBySelectedDate = (date: string) => {
       trends.total_revenue.day_on_day = 0;
     }
     
+    // 计算设备数的同比
+    if (lastYearData.device_count > 0) {
+      trends.device_count.day_on_day = parseFloat(((dateData.device_count - lastYearData.device_count) / lastYearData.device_count * 100).toFixed(1));
+    } else {
+      trends.device_count.day_on_day = 0;
+    }
+    
     // 计算环比（与上个月比较）- 确保是上月同一天
     if (lastMonthData.user_count > 0) {
       trends.user_count.week_on_week = parseFloat(((dateData.user_count - lastMonthData.user_count) / lastMonthData.user_count * 100).toFixed(1));
@@ -231,9 +237,12 @@ const updateCardsBySelectedDate = (date: string) => {
       trends.total_revenue.week_on_week = 0;
     }
     
-    // 设备数量的同比和环比（由于缺少历史数据，简化处理）
-    trends.device_count.day_on_day = 0;
-    trends.device_count.week_on_week = 0;
+    // 计算设备数的环比
+    if (lastMonthData.device_count > 0) {
+      trends.device_count.week_on_week = parseFloat(((dateData.device_count - lastMonthData.device_count) / lastMonthData.device_count * 100).toFixed(1));
+    } else {
+      trends.device_count.week_on_week = 0;
+    }
   } else {
     // 如果找不到对应日期的数据，置为0
     selectedDateData.user_count = 0;
@@ -384,6 +393,7 @@ const updateTimelineChart = () => {
   const users = timelineData.value.map(item => item.user_count).reverse()
   const events = timelineData.value.map(item => item.event_count).reverse()
   const revenues = timelineData.value.map(item => item.revenue).reverse()
+  const devices = timelineData.value.map(item => item.device_count).reverse()
   
   const option = {
     title: {
@@ -417,7 +427,7 @@ const updateTimelineChart = () => {
       }
     },
     legend: {
-      data: ['用户数', '事件数', '收入'],
+      data: ['用户数', '事件数', '设备数', '收入'],
       bottom: 0
     },
     grid: {
@@ -470,7 +480,10 @@ const updateTimelineChart = () => {
         emphasis: {
           focus: 'series'
         },
-        data: users
+        data: users,
+        itemStyle: {
+          color: '#3498db'
+        }
       },
       {
         name: '事件数',
@@ -479,7 +492,22 @@ const updateTimelineChart = () => {
         emphasis: {
           focus: 'series'
         },
-        data: events
+        data: events,
+        itemStyle: {
+          color: '#9b59b6'
+        }
+      },
+      {
+        name: '设备数',
+        type: 'line',
+        smooth: true,
+        emphasis: {
+          focus: 'series'
+        },
+        data: devices,
+        itemStyle: {
+          color: '#e67e22'
+        }
       },
       {
         name: '收入',
@@ -491,7 +519,7 @@ const updateTimelineChart = () => {
         },
         data: revenues,
         itemStyle: {
-          color: '#91cc75'
+          color: '#27ae60'
         },
         areaStyle: {
           opacity: 0.2
@@ -817,7 +845,7 @@ const onUnmounted = () => {
           </el-table-column>
           <el-table-column label="设备数" min-width="100">
             <template #default="scope">
-              {{ formatNumber(overviewData.device_count) }}
+              {{ formatNumber(scope.row.device_count) }}
             </template>
           </el-table-column>
           <el-table-column prop="revenue" label="收入" min-width="120">

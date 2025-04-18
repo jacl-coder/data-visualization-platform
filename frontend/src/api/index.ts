@@ -138,6 +138,7 @@ export interface TimelineItem {
   user_count: number
   event_count: number
   revenue: number
+  device_count: number
 }
 
 // 国家统计数据类型
