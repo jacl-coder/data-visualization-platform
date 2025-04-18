@@ -102,6 +102,8 @@ data-visualization-platform/
 │   ├── create_database.py         # 数据库创建
 │   ├── calculate_ltv.py           # LTV计算
 │   └── requirements.txt           # Python依赖
+├── scripts/                       # 部署与维护脚本
+│   └── setup.sh                   # 一键安装与启动脚本
 ├── database/                      # 数据库文件
 │   └── app.db                     # SQLite数据库
 ├── 后端考核/                      # 原始数据和需求
@@ -196,22 +198,23 @@ python data_processing/process_data.py       # 处理CSV数据
 python data_processing/calculate_ltv.py      # 计算LTV
 ```
 
-5. 一键安装与启动（开发中，预计很快完成）
+5. 一键安装与启动
 ```bash
-# 部署脚本正在开发中，目前已完成约50%
-# 已实现环境检查和依赖安装部分
+# 使用一键安装脚本（已完成）
 chmod +x scripts/setup.sh
 ./scripts/setup.sh
 ```
 
-该脚本计划自动执行以下操作（部分功能已实现）：
-- 检查系统环境（已完成）
-- 安装所需依赖（已完成）
-- 处理CSV数据并导入SQLite（开发中）
-- 编译C++后端（开发中）
-- 安装前端依赖并构建（开发中）
-- 启动后端和前端服务（开发中）
-- 打开浏览器访问应用（开发中）
+该脚本自动执行以下操作：
+- 检查系统环境（Python, Node.js, npm, CMake, SQLite）
+- 安装所需依赖
+- 处理CSV数据并导入SQLite
+- 编译C++后端
+- 安装前端依赖并启动服务
+- 启动后端服务
+- 打开浏览器访问应用
+
+运行后，按 Ctrl+C 可以停止所有服务并清理资源。
 
 ### 数据处理详解
 
@@ -231,9 +234,13 @@ chmod +x scripts/setup.sh
    - 国家维度
    - 设备维度
 
+### 日志配置
+
+数据处理脚本现已优化日志配置，不再生成`data_processing.log`文件，只将日志输出到控制台。如需生成日志文件，可在`data_processing/main.py`文件中修改日志配置。
+
 ### 手动安装
 
-由于自动部署脚本仍在开发中，可以按照以下步骤手动安装和运行：
+如果不想使用自动部署脚本，可以按照以下步骤手动安装和运行：
 
 1. 安装依赖
 ```bash
