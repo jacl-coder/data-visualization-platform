@@ -120,11 +120,13 @@ data-visualization-platform/
 
 ### 环境要求
 - Python 3.9+（已在 Python 3.9.21 上测试）
-- Node.js 14+（已在 Node.js 18.19.1 上测试）
+- Node.js 14.18+（推荐使用18.x LTS版本，已在 Node.js 18.19.1 上测试）
+  - 注意：低于14.18的版本不支持Vite所需的ES模块语法
 - npm 9.2.0+
 - C++ 编译器（支持C++17，已在 GCC 13.3.0 上测试）
 - CMake 3.20+（已在 CMake 3.28.3 上测试）
 - SQLite 3.35+（已在 SQLite 3.45.3 上测试）
+- curl（用于检测网络服务状态）
 - Asio库（C++异步I/O库，用于后端网络通信）
   - Debian/Ubuntu: `sudo apt-get install libasio-dev`
   - CentOS/RHEL/Fedora: `sudo yum install asio-devel`

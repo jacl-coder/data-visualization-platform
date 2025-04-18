@@ -27,7 +27,7 @@ FRONTEND_PID=""
 
 # 项目依赖版本
 REQUIRED_PYTHON_VERSION="3.9"
-REQUIRED_NODE_VERSION="14"
+REQUIRED_NODE_VERSION="18"
 REQUIRED_NPM_VERSION="7"
 REQUIRED_CMAKE_VERSION="3.20"
 
@@ -128,16 +128,22 @@ function check_dependencies() {
     if ! command -v node &> /dev/null; then
         echo -e "${YELLOW}未找到Node.js，尝试自动安装...${NC}"
         if [ "$OS_TYPE" == "debian" ]; then
+            # 安装最新的Node.js 18.x LTS版本
+            echo -e "  - 安装Node.js 18.x LTS版本..."
             curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
             sudo apt-get install -y nodejs
         elif [ "$OS_TYPE" == "redhat" ]; then
+            # 安装最新的Node.js 18.x LTS版本
+            echo -e "  - 安装Node.js 18.x LTS版本..."
             curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
             sudo yum install -y nodejs
         elif [ "$OS_TYPE" == "mac" ]; then
-            brew install node
+            brew install node@18
+            brew link node@18
         else
             echo -e "${RED}错误: 未找到Node.js${NC}"
             echo -e "请手动安装Node.js $REQUIRED_NODE_VERSION 或更高版本后重试"
+            echo -e "推荐安装Node.js 18.x LTS版本，可以访问 https://nodejs.org/en/download/ 获取安装包"
             exit 1
         fi
         
@@ -153,8 +159,73 @@ function check_dependencies() {
     NODE_VERSION=$(node -v | cut -d 'v' -f 2)
     echo -e "  - 检测到Node.js版本: ${GREEN}$NODE_VERSION${NC}"
     
-    if (( $(echo "$NODE_VERSION < $REQUIRED_NODE_VERSION" | bc -l) )); then
-        echo -e "${YELLOW}警告: 推荐Node.js版本 $REQUIRED_NODE_VERSION 或更高${NC}"
+    # 将版本号分解为主版本号
+    NODE_MAJOR_VERSION=$(echo $NODE_VERSION | cut -d '.' -f 1)
+    
+    if (( $NODE_MAJOR_VERSION < 14 )); then
+        echo -e "${RED}错误: Node.js版本过低 (需要 14+ 版本)${NC}"
+        echo -e "当前版本 $NODE_VERSION 不支持Vite所需的ES模块语法"
+        echo -e "请升级Node.js版本:"
+        
+        if [ "$OS_TYPE" == "debian" ]; then
+            echo -e "  - 尝试自动升级到Node.js 18.x LTS版本..."
+            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+        elif [ "$OS_TYPE" == "redhat" ]; then
+            echo -e "  - 尝试自动升级到Node.js 18.x LTS版本..."
+            curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
+            sudo yum install -y nodejs
+        elif [ "$OS_TYPE" == "mac" ]; then
+            echo -e "  - 尝试自动升级Node.js..."
+            brew install node@18
+            brew link --overwrite node@18
+        else
+            echo -e "请手动升级Node.js到 18.x LTS版本"
+            echo -e "可以访问 https://nodejs.org/en/download/ 获取安装包"
+            exit 1
+        fi
+        
+        # 再次检查版本
+        NODE_VERSION=$(node -v | cut -d 'v' -f 2)
+        NODE_MAJOR_VERSION=$(echo $NODE_VERSION | cut -d '.' -f 1)
+        
+        if (( $NODE_MAJOR_VERSION < 14 )); then
+            echo -e "${RED}错误: Node.js升级失败，版本仍然太低${NC}"
+            echo -e "请手动升级Node.js到 18.x LTS版本"
+            exit 1
+        else
+            echo -e "${GREEN}Node.js升级成功! 当前版本: $NODE_VERSION${NC}"
+        fi
+    elif (( $NODE_MAJOR_VERSION < 18 )) && (( $NODE_MAJOR_VERSION >= 14 )); then
+        echo -e "${YELLOW}警告: 建议使用Node.js 18.x LTS版本以获得最佳兼容性${NC}"
+        echo -e "当前版本 $NODE_VERSION 可能工作，但不推荐"
+        
+        # 询问用户是否要升级
+        read -p "是否升级到Node.js 18.x LTS版本? (y/n): " -n 1 -r REPLY
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            if [ "$OS_TYPE" == "debian" ]; then
+                echo -e "  - 升级到Node.js 18.x LTS版本..."
+                curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+                sudo apt-get install -y nodejs
+            elif [ "$OS_TYPE" == "redhat" ]; then
+                echo -e "  - 升级到Node.js 18.x LTS版本..."
+                curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
+                sudo yum install -y nodejs
+            elif [ "$OS_TYPE" == "mac" ]; then
+                echo -e "  - 升级Node.js..."
+                brew install node@18
+                brew link --overwrite node@18
+            else
+                echo -e "${YELLOW}无法自动升级Node.js，继续使用当前版本${NC}"
+            fi
+            
+            # 再次检查版本
+            NODE_VERSION=$(node -v | cut -d 'v' -f 2)
+            echo -e "  - 当前Node.js版本: ${GREEN}$NODE_VERSION${NC}"
+        else
+            echo -e "  - 继续使用当前Node.js版本: $NODE_VERSION"
+        fi
     fi
     
     # 检查npm
@@ -279,6 +350,32 @@ function check_dependencies() {
     
     SQLITE_VERSION=$(sqlite3 --version | awk '{print $1}')
     echo -e "  - 检测到sqlite3版本: ${GREEN}$SQLITE_VERSION${NC}"
+    
+    # 检查curl（用于检测服务是否就绪）
+    if ! command -v curl &> /dev/null; then
+        echo -e "${YELLOW}未找到curl命令，尝试自动安装...${NC}"
+        if [ "$OS_TYPE" == "debian" ]; then
+            sudo apt-get update && sudo apt-get install -y curl
+        elif [ "$OS_TYPE" == "redhat" ]; then
+            sudo yum install -y curl
+        elif [ "$OS_TYPE" == "mac" ]; then
+            brew install curl
+        else
+            echo -e "${RED}错误: 未找到curl命令${NC}"
+            echo -e "请手动安装curl后重试"
+            exit 1
+        fi
+        
+        # 再次检查是否已安装
+        if ! command -v curl &> /dev/null; then
+            echo -e "${RED}错误: curl安装失败${NC}"
+            echo -e "请手动安装curl后重试"
+            exit 1
+        else
+            echo -e "${GREEN}curl安装成功!${NC}"
+        fi
+    fi
+    echo -e "  - 检测到curl已安装"
     
     # 检查Asio库（C++后端依赖）
     echo -e "  - 检查Asio库..."
@@ -600,17 +697,39 @@ function start_services() {
     MAX_RETRIES=10
     
     while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-        if curl --silent --head --fail $BACKEND_URL > /dev/null; then
-            echo -e "  - ${GREEN}后端服务已就绪${NC}"
-            break
+        # 优先使用curl检查服务
+        if command -v curl &> /dev/null; then
+            if curl --silent --head --fail $BACKEND_URL > /dev/null; then
+                echo -e "  - ${GREEN}后端服务已就绪${NC}"
+                break
+            fi
+        # 如果curl不可用，尝试使用nc命令
+        elif command -v nc &> /dev/null; then
+            if nc -z -w 2 localhost 8080; then
+                echo -e "  - ${GREEN}后端服务已就绪${NC}"
+                break
+            fi
+        # 如果nc也不可用，尝试使用wget命令
+        elif command -v wget &> /dev/null; then
+            if wget --spider --quiet $BACKEND_URL; then
+                echo -e "  - ${GREEN}后端服务已就绪${NC}"
+                break
+            fi
+        # 最后尝试使用纯bash进行TCP连接测试
+        else
+            if (echo > /dev/tcp/localhost/8080) &> /dev/null; then
+                echo -e "  - ${GREEN}后端服务已就绪${NC}"
+                break
+            fi
         fi
         
         RETRY_COUNT=$((RETRY_COUNT+1))
         
         if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
             echo -e "${RED}错误: 后端服务无响应${NC}"
-            cleanup
-            exit 1
+            echo -e "${YELLOW}但服务进程似乎已启动，将继续尝试启动前端...${NC}"
+            # 不退出，继续尝试启动前端
+            break
         fi
         
         echo -e "  - 等待后端服务 (尝试 $RETRY_COUNT/$MAX_RETRIES)..."
@@ -641,9 +760,30 @@ function start_services() {
     MAX_RETRIES=10
     
     while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-        if curl --silent --head --fail $FRONTEND_URL > /dev/null; then
-            echo -e "  - ${GREEN}前端服务已就绪${NC}"
-            break
+        # 优先使用curl检查服务
+        if command -v curl &> /dev/null; then
+            if curl --silent --head --fail $FRONTEND_URL > /dev/null; then
+                echo -e "  - ${GREEN}前端服务已就绪${NC}"
+                break
+            fi
+        # 如果curl不可用，尝试使用nc命令
+        elif command -v nc &> /dev/null; then
+            if nc -z -w 2 localhost 5173; then
+                echo -e "  - ${GREEN}前端服务已就绪${NC}"
+                break
+            fi
+        # 如果nc也不可用，尝试使用wget命令
+        elif command -v wget &> /dev/null; then
+            if wget --spider --quiet $FRONTEND_URL; then
+                echo -e "  - ${GREEN}前端服务已就绪${NC}"
+                break
+            fi
+        # 最后尝试使用纯bash进行TCP连接测试
+        else
+            if (echo > /dev/tcp/localhost/5173) &> /dev/null; then
+                echo -e "  - ${GREEN}前端服务已就绪${NC}"
+                break
+            fi
         fi
         
         RETRY_COUNT=$((RETRY_COUNT+1))
