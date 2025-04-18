@@ -129,6 +129,10 @@ data-visualization-platform/
   - Debian/Ubuntu: `sudo apt-get install libasio-dev`
   - CentOS/RHEL/Fedora: `sudo yum install asio-devel`
   - macOS: `brew install asio`
+- Boost库（C++系统和线程组件，用于后端并发处理）
+  - Debian/Ubuntu: `sudo apt-get install libboost-system-dev libboost-thread-dev`
+  - CentOS/RHEL/Fedora: `sudo yum install boost-devel`
+  - macOS: `brew install boost`
 
 ### 已测试环境
 - 操作系统：Ubuntu Linux（内核 6.11.0）
@@ -212,6 +216,7 @@ chmod +x scripts/setup.sh
 该脚本自动执行以下操作：
 - 检查系统环境（Python, Node.js, npm, CMake, SQLite）
 - 安装所需依赖
+- 创建Python虚拟环境并安装项目依赖
 - 处理CSV数据并导入SQLite
 - 清理旧的构建文件
 - 编译C++后端
@@ -222,6 +227,8 @@ chmod +x scripts/setup.sh
 运行后，按 Ctrl+C 可以停止所有服务并清理资源。
 
 > **注意**：setup.sh脚本已支持在Debian/Ubuntu、CentOS/RHEL/Fedora和macOS系统上自动安装缺少的依赖，如Python、Node.js、C++编译器等。自动安装需要管理员权限（sudo）。如果您的系统不支持自动安装，脚本将提示您手动安装所需依赖。
+> 
+> 脚本会在项目根目录创建名为`venv`的Python虚拟环境，所有Python依赖将安装在该环境中，以避免影响系统Python环境。
 
 ### 数据处理详解
 

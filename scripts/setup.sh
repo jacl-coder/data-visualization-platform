@@ -331,6 +331,54 @@ function check_dependencies() {
         echo -e "  - macOS: brew install asio"
     fi
     
+    # 检查Boost库（C++后端依赖）
+    echo -e "  - 检查Boost库..."
+    if [ "$OS_TYPE" == "debian" ]; then
+        if ! dpkg -l | grep -q libboost-system-dev || ! dpkg -l | grep -q libboost-thread-dev; then
+            echo -e "${YELLOW}未找到Boost库的system或thread组件，尝试自动安装...${NC}"
+            sudo apt-get update && sudo apt-get install -y libboost-system-dev libboost-thread-dev
+            if dpkg -l | grep -q libboost-system-dev && dpkg -l | grep -q libboost-thread-dev; then
+                echo -e "${GREEN}Boost库安装成功!${NC}"
+            else
+                echo -e "${YELLOW}警告: Boost库安装可能不完整，但将继续尝试构建${NC}"
+                echo -e "如果构建失败，请手动安装: sudo apt-get install libboost-all-dev"
+            fi
+        else
+            echo -e "  - 检测到Boost库system和thread组件已安装"
+        fi
+    elif [ "$OS_TYPE" == "redhat" ]; then
+        if ! rpm -qa | grep -q boost-devel; then
+            echo -e "${YELLOW}未找到Boost库，尝试自动安装...${NC}"
+            sudo yum install -y boost-devel
+            if rpm -qa | grep -q boost-devel; then
+                echo -e "${GREEN}Boost库安装成功!${NC}"
+            else
+                echo -e "${YELLOW}警告: Boost库安装可能不完整，但将继续尝试构建${NC}"
+                echo -e "如果构建失败，请手动安装: sudo yum install boost-devel"
+            fi
+        else
+            echo -e "  - 检测到Boost库已安装"
+        fi
+    elif [ "$OS_TYPE" == "mac" ]; then
+        if ! brew list --formula | grep -q boost; then
+            echo -e "${YELLOW}未找到Boost库，尝试自动安装...${NC}"
+            brew install boost
+            if brew list --formula | grep -q boost; then
+                echo -e "${GREEN}Boost库安装成功!${NC}"
+            else
+                echo -e "${YELLOW}警告: Boost库安装可能不完整，但将继续尝试构建${NC}"
+                echo -e "如果构建失败，请手动安装: brew install boost"
+            fi
+        else
+            echo -e "  - 检测到Boost库已安装"
+        fi
+    else
+        echo -e "${YELLOW}警告: 无法自动检测或安装Boost库，如果后续构建失败，请手动安装${NC}"
+        echo -e "  - Debian/Ubuntu: sudo apt-get install libboost-system-dev libboost-thread-dev"
+        echo -e "  - CentOS/RHEL/Fedora: sudo yum install boost-devel"
+        echo -e "  - macOS: brew install boost"
+    fi
+    
     # 检查xdg-open或open (用于打开浏览器)
     if command -v xdg-open &> /dev/null; then
         OPEN_CMD="xdg-open"
@@ -360,22 +408,74 @@ function check_dependencies() {
 function install_python_deps() {
     echo -e "${BLUE}[2/6] 安装Python依赖...${NC}"
     
+    cd "$PROJECT_DIR"
+    
+    # 检查python3-venv是否已安装
+    if [ "$OS_TYPE" == "debian" ]; then
+        if ! dpkg -l | grep -q python3-venv; then
+            echo -e "${YELLOW}未找到python3-venv包，尝试安装...${NC}"
+            sudo apt-get update && sudo apt-get install -y python3-venv python3-full
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}错误: 无法安装python3-venv${NC}"
+                exit 1
+            fi
+        fi
+    elif [ "$OS_TYPE" == "redhat" ]; then
+        if ! rpm -qa | grep -q python3-virtualenv; then
+            echo -e "${YELLOW}未找到python3-virtualenv包，尝试安装...${NC}"
+            sudo yum install -y python3-virtualenv
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}错误: 无法安装python3-virtualenv${NC}"
+                exit 1
+            fi
+        fi
+    fi
+    
+    # 创建虚拟环境目录（如果不存在）
+    VENV_DIR="$PROJECT_DIR/venv"
+    if [ ! -d "$VENV_DIR" ]; then
+        echo -e "  - 创建Python虚拟环境..."
+        python3 -m venv "$VENV_DIR"
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}错误: 无法创建Python虚拟环境${NC}"
+            echo -e "请确保已安装python3-venv包: sudo apt-get install python3-venv python3-full"
+            exit 1
+        fi
+    else
+        echo -e "  - 使用已存在的Python虚拟环境"
+    fi
+    
+    # 激活虚拟环境
+    echo -e "  - 激活虚拟环境..."
+    source "$VENV_DIR/bin/activate"
+    
+    # 升级pip
+    echo -e "  - 升级pip..."
+    pip install --upgrade pip
+    
     cd "$DATA_PROCESSING_DIR"
     
     if [ ! -f "requirements.txt" ]; then
         echo -e "${RED}错误: 未找到data_processing/requirements.txt文件${NC}"
+        deactivate
         exit 1
     fi
     
     echo -e "  - 安装项目所需Python库..."
-    pip3 install -r requirements.txt
+    pip install -r requirements.txt
     
     if [ $? -ne 0 ]; then
         echo -e "${RED}错误: Python依赖安装失败${NC}"
+        deactivate
         exit 1
     fi
     
     echo -e "${GREEN}Python依赖安装完成!${NC}"
+    
+    # 记录虚拟环境路径，后面需要使用
+    PYTHON_VENV="$VENV_DIR/bin/python3"
+    
+    # 暂时不退出虚拟环境，因为后面的数据处理还需要使用
     echo
 }
 
@@ -389,19 +489,25 @@ function process_data() {
     mkdir -p "$DATABASE_DIR"
     
     echo -e "  - 运行数据处理脚本..."
+    # 使用虚拟环境中的Python
     # 清空控制台输出但保留错误信息
-    python3 main.py > /dev/null
+    "$PYTHON_VENV" main.py > /dev/null
     
     if [ $? -ne 0 ]; then
         echo -e "${RED}错误: 数据处理失败${NC}"
+        deactivate
         exit 1
     fi
     
     # 检查数据库是否创建成功
     if [ ! -f "$DATABASE_DIR/app.db" ]; then
         echo -e "${RED}错误: 数据库创建失败${NC}"
+        deactivate
         exit 1
     fi
+    
+    # 数据处理完成后退出虚拟环境
+    deactivate
     
     echo -e "${GREEN}数据处理完成!${NC}"
     echo
