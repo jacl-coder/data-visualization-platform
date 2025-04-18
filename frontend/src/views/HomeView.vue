@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, reactive, computed } from 'vue'
+import { ref, onMounted, reactive, computed, watch, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import AppLayout from '../components/AppLayout.vue'
 import { getOverview, getTimeline, getDeviceData } from '../api'
@@ -16,6 +16,7 @@ import {
 } from 'echarts/components'
 import { LabelLayout, UniversalTransition } from 'echarts/features'
 import { CanvasRenderer } from 'echarts/renderers'
+import { useViewStateStore } from '../stores/viewState'
 
 // 注册必须的组件
 echarts.use([
@@ -32,9 +33,40 @@ echarts.use([
   CanvasRenderer
 ])
 
+// 获取视图状态存储
+const viewStateStore = useViewStateStore()
+
 // 日期选择
-const selectedDate = ref(new Date())
-const timeRange = ref('month')
+const selectedDate = ref(new Date(viewStateStore.homeViewState.date || new Date()))
+
+// 根据 days 计算时间范围
+const getTimeRangeFromDays = (days: number): string => {
+  if (days <= 7) return 'week';
+  if (days <= 30) return 'month';
+  return 'quarter';
+}
+
+// 设置初始的 days 值
+const days = ref(viewStateStore.homeViewState.days || 30)
+
+// 计算 timeRange，根据 days 值
+const timeRange = computed({
+  get: () => getTimeRangeFromDays(days.value),
+  set: (value: string) => {
+    // 当设置 timeRange 时，同时更新 days
+    switch (value) {
+      case 'week':
+        days.value = 7
+        break
+      case 'month':
+        days.value = 30
+        break
+      case 'quarter':
+        days.value = 90
+        break
+    }
+  }
+})
 
 // 概览数据
 const overviewData = reactive<OverviewData>({
@@ -84,7 +116,6 @@ let deviceChart: echarts.ECharts | null = null
 const timelineData = ref<TimelineItem[]>([])
 const loading = ref(false)
 const loadingOverview = ref(false)
-const days = ref(30)
 
 // 统计卡片为两行
 const statCards = computed(() => [
@@ -385,10 +416,16 @@ const loadTimelineData = async () => {
       // 数据已经是从早到晚排序的
       timelineData.value = filledData
       
-      // 更新所有图表
-      updateTimelineChart()
-      updateRevenueChart()
-      updateDeviceChart()
+      // 确保图表存在时才更新
+      if (lineChart) {
+        updateTimelineChart()
+      }
+      if (revenueChart) {
+        updateRevenueChart()
+      }
+      if (deviceChart) {
+        updateDeviceChart()
+      }
       
       // 加载时间线数据后，更新选中日期的卡片数据
       updateCardsBySelectedDate(formatDate(selectedDate.value))
@@ -436,9 +473,7 @@ const handleDateChange = (date: Date) => {
     // 加载概览数据（仍然需要加载以更新其他图表）
     loadOverviewData(formattedDate)
     
-    // 确保收入和设备图表也更新
-    updateRevenueChart()
-    updateDeviceChart()
+    // 图表更新已经在loadTimelineData中处理
   })
 }
 
@@ -446,17 +481,29 @@ const handleDateChange = (date: Date) => {
 const initCharts = () => {
   // 在下一个渲染周期初始化图表
   setTimeout(() => {
+    // 初始化时间线图表
     if (lineChartRef.value) {
+      if (lineChart) {
+        lineChart.dispose();
+      }
       lineChart = echarts.init(lineChartRef.value, null, { renderer: 'canvas' })
       updateTimelineChart()
     }
     
+    // 初始化收入图表
     if (revenueChartRef.value) {
+      if (revenueChart) {
+        revenueChart.dispose();
+      }
       revenueChart = echarts.init(revenueChartRef.value, null, { renderer: 'canvas' })
       updateRevenueChart()
     }
     
+    // 初始化设备图表
     if (deviceChartRef.value) {
+      if (deviceChart) {
+        deviceChart.dispose();
+      }
       deviceChart = echarts.init(deviceChartRef.value, null, { renderer: 'canvas' })
       updateDeviceChart()
     }
@@ -607,10 +654,6 @@ const updateTimelineChart = () => {
   }
   
   lineChart.setOption(option)
-  
-  // 同时更新收入和设备图表
-  updateRevenueChart()
-  updateDeviceChart()
 }
 
 // 更新收入趋势图
@@ -756,49 +799,54 @@ const updateDeviceChart = () => {
   deviceChart.setOption(deviceOption)
 }
 
-// 时间范围变化
-const handleTimeRangeChange = () => {
-  switch (timeRange.value) {
-    case 'week':
-      days.value = 7
-      break
-    case 'month':
-      days.value = 30
-      break
-    case 'quarter':
-      days.value = 90
-      break
-  }
-  loadTimelineData().then(() => {
-    // 更新收入趋势图和设备趋势图
-    updateRevenueChart()
-    updateDeviceChart()
+// 监视状态变化，更新存储
+watch(selectedDate, (newDate) => {
+  viewStateStore.updateHomeViewState({
+    date: formatDate(newDate)
   })
-}
+})
+
+// 监视days变化，重新加载数据
+watch(days, (newDays) => {
+  // 更新存储
+  viewStateStore.updateHomeViewState({
+    days: newDays
+  })
+  
+  // 重新加载数据
+  loadTimelineData()
+})
+
+// 初始加载
+onMounted(() => {
+  loadOverviewData()
+  loadTimelineData()
+  window.addEventListener('resize', handleResize)
+})
+
+// 组件卸载时移除事件监听
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  // 销毁图表实例
+  if (lineChart) {
+    lineChart.dispose()
+    lineChart = null
+  }
+  if (revenueChart) {
+    revenueChart.dispose()
+    revenueChart = null
+  }
+  if (deviceChart) {
+    deviceChart.dispose()
+    deviceChart = null
+  }
+})
 
 // 窗口大小变化时重新绘制图表
 const handleResize = () => {
   lineChart?.resize()
   revenueChart?.resize()
   deviceChart?.resize()
-}
-
-// 初始加载数据
-onMounted(() => {
-  // 先加载时间线数据，再加载概览数据
-  loadTimelineData().then(() => {
-    loadOverviewData()
-  })
-  window.addEventListener('resize', handleResize)
-})
-
-// 组件卸载时移除事件监听
-const onUnmounted = () => {
-  window.removeEventListener('resize', handleResize)
-  // 销毁图表实例
-  lineChart?.dispose()
-  revenueChart?.dispose()
-  deviceChart?.dispose()
 }
 </script>
 
@@ -823,7 +871,7 @@ const onUnmounted = () => {
             :disabled-date="disabledDate"
           />
           
-          <el-radio-group v-model="timeRange" class="time-range-selector" @change="handleTimeRangeChange">
+          <el-radio-group v-model="timeRange" class="time-range-selector">
             <el-radio-button value="week">周</el-radio-button>
             <el-radio-button value="month">月</el-radio-button>
             <el-radio-button value="quarter">季度</el-radio-button>
@@ -901,7 +949,6 @@ const onUnmounted = () => {
           <el-select 
             v-model="days" 
             placeholder="选择时间范围" 
-            @change="loadTimelineData"
             class="days-select"
           >
             <el-option label="最近7天" :value="7" />

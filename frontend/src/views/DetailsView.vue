@@ -15,6 +15,10 @@ import { CanvasRenderer } from 'echarts/renderers'
 import AppLayout from '../components/AppLayout.vue'
 import { getCountryData, getDeviceData, getTimeline, getDetailsData, clearApiCache } from '../api'
 import type { CountryItem, DeviceItem, TimelineItem, DetailsData } from '../api'
+import { useViewStateStore } from '../stores/viewState'
+
+// 获取视图状态存储
+const viewStateStore = useViewStateStore()
 
 // 注册ECharts组件
 echarts.use([
@@ -31,7 +35,10 @@ echarts.use([
 ])
 
 // 日期范围选择
-const dateRange = ref([new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), new Date()])
+const dateRange = ref([
+  new Date(viewStateStore.detailsViewState.dateRange[0] || Date.now() - 30 * 24 * 60 * 60 * 1000), 
+  new Date(viewStateStore.detailsViewState.dateRange[1] || Date.now())
+])
 
 // 数据加载状态
 const loadingCountry = ref(false)
@@ -527,7 +534,8 @@ const renderTimelineChart = async () => {
   // 第一天无增长率数据
   userGrowth.unshift(0)
   
-  const option = {
+  // 保存原始选项对象，用于还原
+  const initialOption = {
     title: {
       text: '用户和收入时间趋势',
       left: 'center',
@@ -727,7 +735,23 @@ const renderTimelineChart = async () => {
     ]
   }
   
-  timelineChart.setOption(option)
+  // 设置图表选项
+  timelineChart.setOption(initialOption)
+  
+  // 保存初始选项，以便还原时使用
+  // 使用一个闭包保存初始选项
+  const savedInitialOption = {...initialOption}
+  
+  // 添加还原事件处理
+  timelineChart.off('restore')
+  timelineChart.on('restore', () => {
+    // 只有当图表实例存在时才还原
+    if (timelineChart) {
+      // 还原到初始状态
+      timelineChart.setOption(savedInitialOption, true)
+      ElMessage.success('图表已还原至初始状态')
+    }
+  })
   
   // 添加点击事件
   timelineChart.off('click')
@@ -911,6 +935,18 @@ watch(() => deviceData.value, () => {
 
 watch(() => timelineData.value, () => {
   nextTick(() => renderTimelineChart())
+}, { deep: true })
+
+// 监视日期范围变化，保存到状态存储
+watch(dateRange, (newRange) => {
+  if (newRange && newRange.length === 2) {
+    viewStateStore.updateDetailsViewState({
+      dateRange: [
+        formatDate(newRange[0]),
+        formatDate(newRange[1])
+      ]
+    })
+  }
 }, { deep: true })
 
 // 组件卸载时清理资源
