@@ -15,6 +15,11 @@ import numpy as np
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# 固定随机种子，确保每次运行结果一致
+np.random.seed(42)
+if hasattr(pd, 'set_option'):
+    pd.set_option('mode.chained_assignment', None)
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -157,19 +162,27 @@ def process_csv_data():
         logger.info(f"开始处理CSV数据: {CSV_FILE}")
         
         # 读取CSV数据
-        # 由于文件可能较大，使用分块读取
-        chunk_size = 10000  # 每次读取的行数
+        logger.info("读取整个CSV文件到内存")
+        df = pd.read_csv(CSV_FILE)
+        logger.info(f"CSV文件读取完成，共{len(df)}行")
         
         # 连接数据库
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
+        
+        # 清空现有数据
+        logger.info("清空现有事件、用户和购买数据")
+        cursor.execute("DELETE FROM events")
+        cursor.execute("DELETE FROM users")
+        cursor.execute("DELETE FROM purchases")
+        conn.commit()
         
         # 获取货币汇率数据
         cursor.execute("SELECT currency_code, rate_to_usd FROM currency_rates")
         currency_rates = dict(cursor.fetchall())
         
         # 初始化计数器
-        total_rows = 0
+        total_rows = len(df)
         inserted_events = 0
         inserted_users = 0
         inserted_purchases = 0
@@ -183,256 +196,226 @@ def process_csv_data():
             else:
                 return str(val)
         
-        # 分块处理CSV
-        for chunk_num, chunk in enumerate(pd.read_csv(CSV_FILE, chunksize=chunk_size)):
-            logger.info(f"处理数据块 {chunk_num+1}, 行数: {len(chunk)}")
-            total_rows += len(chunk)
-            
-            # 预处理数据
-            # 填充空值
-            chunk = chunk.fillna({
-                'event_name': 'unknown_event',
-                'country_code': 'unknown',
-                'device_model': 'unknown_device',
-                'event_revenue_currency': 'USD'
-            })
-            
-            # 添加设备类别
-            chunk['device_category'] = chunk['device_model'].apply(extract_device_category)
-            
-            # 处理日期时间
-            chunk['created_date'] = chunk['created_date'].apply(clean_date)
-            chunk['event_time'] = chunk['event_time'].apply(clean_datetime)
-            chunk['install_time'] = chunk['install_time'].apply(clean_datetime)
-            
-            # 统一货币
-            chunk['event_revenue_currency'] = chunk['event_revenue_currency'].apply(clean_currency_code)
-            
-            # 计算USD收入
-            def convert_to_usd(row):
-                if pd.isna(row['event_revenue']) or not row['event_revenue']:
-                    return 0.0
-                
-                # 如果已经有USD收入，直接使用
-                if 'event_revenue_usd' in row and row['event_revenue_usd']:
-                    return float(row['event_revenue_usd'])
-                
-                # 使用汇率转换
-                currency = row['event_revenue_currency']
-                revenue = float(row['event_revenue'])
-                
-                rate = currency_rates.get(currency, 1.0)  # 默认为1.0
-                return revenue * rate
-            
-            chunk['event_revenue_usd'] = chunk.apply(convert_to_usd, axis=1)
-            
-            # 提取事件参数
-            chunk['event_params'] = chunk.apply(extract_event_params, axis=1)
-            
-            # 处理产品ID
-            chunk['product_id'] = chunk.apply(extract_product_id, axis=1)
-            
-            # 开启事务
-            conn.execute("BEGIN TRANSACTION")
-            
-            try:
-                # 1. 插入用户数据
-                users_data = []
-                # 跟踪此批次中已处理的用户ID，避免重复
-                processed_user_ids = set()
-                inserted_batch_users = 0
-                
-                for _, row in chunk.iterrows():
-                    appsflyer_id = row['appsflyer_id']
-                    if pd.isna(appsflyer_id) or not appsflyer_id:
-                        continue
-                    
-                    appsflyer_id = str(appsflyer_id)
-                    
-                    # 如果此用户ID已在当前批次处理，则跳过
-                    if appsflyer_id in processed_user_ids:
-                        continue
-                    
-                    # 将此用户ID添加到已处理集合
-                    processed_user_ids.add(appsflyer_id)
-                    
-                    # 检查用户是否已存在于数据库
-                    cursor.execute("SELECT 1 FROM users WHERE appsflyer_id = ?", (appsflyer_id,))
-                    if cursor.fetchone():
-                        # 更新用户最后一次出现日期
-                        cursor.execute(
-                            "UPDATE users SET last_seen_date = MAX(last_seen_date, ?) WHERE appsflyer_id = ?",
-                            (ensure_str_or_none(row['created_date']), appsflyer_id)
-                        )
-                    else:
-                        # 插入新用户，确保所有值都是SQLite支持的类型
-                        first_seen_date = ensure_str_or_none(row['created_date'])
-                        last_seen_date = ensure_str_or_none(row['created_date'])
-                        country_code = str(row['country_code']) if not pd.isna(row['country_code']) else None
-                        device_model = str(row['device_model']) if not pd.isna(row['device_model']) else None
-                        device_category = str(row['device_category']) if not pd.isna(row['device_category']) else None
-                        platform = str(row.get('platform', '')) if row.get('platform') and not pd.isna(row.get('platform')) else None
-                        media_source = str(row.get('media_source', '')) if row.get('media_source') and not pd.isna(row.get('media_source')) else None
-                        install_time = ensure_str_or_none(row['install_time'])
-                        
-                        # 立即插入用户数据，确保满足外键约束
-                        cursor.execute("""
-                        INSERT OR REPLACE INTO users 
-                        (appsflyer_id, first_seen_date, last_seen_date, 
-                         country_code, device_model, device_category, 
-                         platform, media_source, install_time)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            appsflyer_id,
-                            first_seen_date,
-                            last_seen_date,
-                            country_code,
-                            device_model,
-                            device_category,
-                            platform,
-                            media_source,
-                            install_time
-                        ))
-                        inserted_batch_users += 1
-                
-                inserted_users += inserted_batch_users
-                logger.info(f"已插入/更新 {inserted_batch_users} 个用户")
-                
-                # 2. 插入事件数据
-                events_data = []
-                for _, row in chunk.iterrows():
-                    appsflyer_id = row['appsflyer_id']
-                    if pd.isna(appsflyer_id) or not appsflyer_id:
-                        continue
-                    
-                    # 确保所有值都是SQLite支持的类型
-                    event_name = str(row['event_name']) if not pd.isna(row['event_name']) else 'unknown_event'
-                    event_value = str(row.get('event_value', '')) if row.get('event_value') and not pd.isna(row.get('event_value')) else None
-                    created_date = ensure_str_or_none(row['created_date'])
-                    event_time = ensure_str_or_none(row['event_time'])
-                    country_code = str(row['country_code']) if not pd.isna(row['country_code']) else None
-                    device_model = str(row['device_model']) if not pd.isna(row['device_model']) else None
-                    device_category = str(row['device_category']) if not pd.isna(row['device_category']) else None
-                    app_id = str(row.get('app_id', '')) if row.get('app_id') and not pd.isna(row.get('app_id')) else None
-                    platform = str(row.get('platform', '')) if row.get('platform') and not pd.isna(row.get('platform')) else None
-                    media_source = str(row.get('media_source', '')) if row.get('media_source') and not pd.isna(row.get('media_source')) else None
-                    event_revenue = float(row.get('event_revenue', 0.0)) if row.get('event_revenue') and not pd.isna(row.get('event_revenue')) else 0.0
-                    event_revenue_currency = str(row['event_revenue_currency']) if not pd.isna(row['event_revenue_currency']) else 'USD'
-                    event_revenue_usd = float(row['event_revenue_usd']) if not pd.isna(row['event_revenue_usd']) else 0.0
-                    event_params = str(row['event_params']) if not pd.isna(row['event_params']) else None
-                    install_time = ensure_str_or_none(row['install_time'])
-                    
-                    events_data.append((
-                        str(appsflyer_id),
-                        event_name,
-                        event_value,
-                        created_date,
-                        event_time,
-                        country_code,
-                        device_model,
-                        device_category,
-                        app_id,
-                        platform,
-                        media_source,
-                        event_revenue,
-                        event_revenue_currency,
-                        event_revenue_usd,
-                        event_params,
-                        install_time
-                    ))
-                
-                if events_data:
-                    cursor.executemany(
-                        """
-                        INSERT INTO events 
-                        (appsflyer_id, event_name, event_value, 
-                         created_date, event_time, country_code, 
-                         device_model, device_category, app_id, 
-                         platform, media_source, event_revenue, 
-                         event_revenue_currency, event_revenue_usd, 
-                         event_params, install_time)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        events_data
-                    )
-                    inserted_events += len(events_data)
-                
-                # 3. 插入购买事件数据
-                purchases_data = []
-                # 跟踪此批次已处理的购买记录，避免重复插入
-                processed_purchases = set()
-                
-                for _, row in chunk.iterrows():
-                    appsflyer_id = row['appsflyer_id']
-                    if (pd.isna(appsflyer_id) or not appsflyer_id or 
-                        row['event_name'] != 'af_purchase' or 
-                        not row['event_revenue_usd']):
-                        continue
-                    
-                    # 确保所有值都是SQLite支持的类型
-                    purchase_time = ensure_str_or_none(row['event_time'])
-                    created_date = ensure_str_or_none(row['created_date'])
-                    country_code = str(row['country_code']) if not pd.isna(row['country_code']) else None
-                    device_category = str(row['device_category']) if not pd.isna(row['device_category']) else None
-                    event_revenue_usd = float(row['event_revenue_usd']) if not pd.isna(row['event_revenue_usd']) else 0.0
-                    product_id = str(row['product_id']) if not pd.isna(row['product_id']) else None
-                    order_id = str(row.get('order_id', '')) if row.get('order_id') and not pd.isna(row.get('order_id')) else None
-                    
-                    # 创建一个唯一键，用于检测重复
-                    # 使用用户ID+订单ID+购买时间的组合作为唯一标识
-                    purchase_key = (str(appsflyer_id), order_id, purchase_time)
-                    
-                    # 如果这个购买记录已经处理过，则跳过
-                    if purchase_key in processed_purchases:
-                        continue
-                    
-                    # 将此购买记录添加到已处理集合
-                    processed_purchases.add(purchase_key)
-                    
-                    purchases_data.append((
-                        str(appsflyer_id),   # 确保是字符串
-                        purchase_time,        # 确保是字符串格式的日期时间
-                        created_date,         # 确保是字符串格式的日期
-                        country_code,         # 可能是None
-                        device_category,      # 可能是None
-                        event_revenue_usd,    # 确保是浮点数
-                        product_id,           # 可能是None
-                        order_id              # 可能是None
-                    ))
-                
-                if purchases_data:
-                    cursor.executemany(
-                        """
-                        INSERT INTO purchases 
-                        (appsflyer_id, purchase_time, created_date, 
-                         country_code, device_category, event_revenue_usd, 
-                         product_id, order_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        purchases_data
-                    )
-                    inserted_purchases += len(purchases_data)
-                
-                # 提交事务
-                conn.commit()
-                
-            except Exception as e:
-                # 回滚事务
-                conn.rollback()
-                logger.error(f"处理数据块 {chunk_num+1} 时出错: {e}")
-                raise
+        # 预处理数据
+        logger.info("预处理数据...")
+        # 填充空值
+        df = df.fillna({
+            'event_name': 'unknown_event',
+            'country_code': 'unknown',
+            'device_model': 'unknown_device',
+            'event_revenue_currency': 'USD'
+        })
         
-        logger.info(f"数据处理完成, 总行数: {total_rows}")
-        logger.info(f"插入用户数: {inserted_users}")
-        logger.info(f"插入事件数: {inserted_events}")
-        logger.info(f"插入购买事件数: {inserted_purchases}")
+        # 添加设备类别
+        df['device_category'] = df['device_model'].apply(extract_device_category)
+        
+        # 处理日期和时间
+        df['created_date'] = df['event_time'].apply(clean_date)
+        df['event_time'] = df['event_time'].apply(clean_datetime)
+        df['install_time'] = df.get('install_time', df['event_time']).apply(clean_datetime)
+        
+        # 确保install_time不晚于event_time
+        for idx, row in df.iterrows():
+            if pd.notna(row['event_time']) and pd.notna(row['install_time']):
+                if row['install_time'] > row['event_time']:
+                    df.at[idx, 'install_time'] = row['event_time']
+        
+        # 确保货币代码规范化
+        df['event_revenue_currency'] = df['event_revenue_currency'].apply(clean_currency_code)
+        
+        # 计算USD收入 - 确保精确到小数点后4位以保持一致性
+        def convert_to_usd(row):
+            if pd.isna(row['event_revenue']) or not row['event_revenue']:
+                return 0.0
+            
+            # 如果已经有USD收入，直接使用
+            if 'event_revenue_usd' in row and row['event_revenue_usd']:
+                return round(float(row['event_revenue_usd']), 4)
+            
+            # 使用汇率转换
+            currency = row['event_revenue_currency']
+            revenue = float(row['event_revenue'])
+            
+            rate = currency_rates.get(currency, 1.0)  # 默认为1.0
+            return round(revenue * rate, 4)  # 确保精确到小数点后4位
+        
+        df['event_revenue_usd'] = df.apply(convert_to_usd, axis=1)
+        
+        # 提取事件参数
+        df['event_params'] = df.apply(extract_event_params, axis=1)
+        
+        # 处理产品ID
+        df['product_id'] = df.apply(extract_product_id, axis=1)
+        
+        # 开启事务
+        conn.execute("BEGIN TRANSACTION")
+        
+        try:
+            # 1. 处理用户数据
+            logger.info("处理用户数据...")
+            user_data = []
+            unique_users = df['appsflyer_id'].dropna().unique()
+            
+            for user_id in unique_users:
+                user_rows = df[df['appsflyer_id'] == user_id]
+                
+                first_seen_date = min(user_rows['created_date'].dropna())
+                last_seen_date = max(user_rows['created_date'].dropna())
+                
+                # 获取用户的第一条记录，用于提取其他字段
+                first_row = user_rows.iloc[0]
+                
+                user_data.append((
+                    str(user_id),
+                    ensure_str_or_none(first_seen_date),
+                    ensure_str_or_none(last_seen_date),
+                    str(first_row['country_code']) if not pd.isna(first_row['country_code']) else None,
+                    str(first_row['device_model']) if not pd.isna(first_row['device_model']) else None,
+                    str(first_row['device_category']) if not pd.isna(first_row['device_category']) else None,
+                    str(first_row.get('platform', '')) if first_row.get('platform') and not pd.isna(first_row.get('platform')) else None,
+                    str(first_row.get('media_source', '')) if first_row.get('media_source') and not pd.isna(first_row.get('media_source')) else None,
+                    ensure_str_or_none(first_row['install_time'])
+                ))
+            
+            # 批量插入用户数据
+            cursor.executemany("""
+            INSERT INTO users 
+            (appsflyer_id, first_seen_date, last_seen_date, 
+             country_code, device_model, device_category, 
+             platform, media_source, install_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, user_data)
+            
+            inserted_users = len(user_data)
+            logger.info(f"已插入 {inserted_users} 个用户")
+            
+            # 2. 插入事件数据
+            logger.info("处理事件数据...")
+            events_data = []
+            
+            for _, row in df.iterrows():
+                appsflyer_id = row['appsflyer_id']
+                if pd.isna(appsflyer_id) or not appsflyer_id:
+                    continue
+                
+                # 确保所有值都是SQLite支持的类型
+                event_name = str(row['event_name']) if not pd.isna(row['event_name']) else 'unknown_event'
+                event_value = str(row.get('event_value', '')) if row.get('event_value') and not pd.isna(row.get('event_value')) else None
+                created_date = ensure_str_or_none(row['created_date'])
+                event_time = ensure_str_or_none(row['event_time'])
+                country_code = str(row['country_code']) if not pd.isna(row['country_code']) else None
+                device_model = str(row['device_model']) if not pd.isna(row['device_model']) else None
+                device_category = str(row['device_category']) if not pd.isna(row['device_category']) else None
+                app_id = str(row.get('app_id', '')) if row.get('app_id') and not pd.isna(row.get('app_id')) else None
+                platform = str(row.get('platform', '')) if row.get('platform') and not pd.isna(row.get('platform')) else None
+                media_source = str(row.get('media_source', '')) if row.get('media_source') and not pd.isna(row.get('media_source')) else None
+                event_revenue = float(row.get('event_revenue', 0.0)) if row.get('event_revenue') and not pd.isna(row.get('event_revenue')) else 0.0
+                event_revenue_currency = str(row['event_revenue_currency']) if not pd.isna(row['event_revenue_currency']) else 'USD'
+                event_revenue_usd = float(row['event_revenue_usd']) if not pd.isna(row['event_revenue_usd']) else 0.0
+                event_params = str(row['event_params']) if not pd.isna(row['event_params']) else None
+                install_time = ensure_str_or_none(row['install_time'])
+                
+                events_data.append((
+                    str(appsflyer_id),
+                    event_name,
+                    event_value,
+                    created_date,
+                    event_time,
+                    country_code,
+                    device_model,
+                    device_category,
+                    app_id,
+                    platform,
+                    media_source,
+                    event_revenue,
+                    event_revenue_currency,
+                    event_revenue_usd,
+                    event_params,
+                    install_time
+                ))
+            
+            # 批量插入事件数据
+            if events_data:
+                cursor.executemany(
+                    """
+                    INSERT INTO events 
+                    (appsflyer_id, event_name, event_value, 
+                     created_date, event_time, country_code, 
+                     device_model, device_category, app_id, 
+                     platform, media_source, event_revenue, 
+                     event_revenue_currency, event_revenue_usd, 
+                     event_params, install_time)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    events_data
+                )
+                inserted_events = len(events_data)
+                logger.info(f"已插入 {inserted_events} 条事件数据")
+            
+            # 3. 处理购买数据
+            logger.info("处理购买数据...")
+            purchases_data = []
+            
+            # 仅处理购买事件
+            purchase_df = df[df['event_name'] == 'af_purchase'].copy()
+            purchase_df = purchase_df[purchase_df['event_revenue_usd'] > 0]
+            
+            # 创建唯一标识来防止重复
+            if not purchase_df.empty:
+                purchase_df['purchase_key'] = purchase_df.apply(
+                    lambda r: f"{r['appsflyer_id']}_{r.get('order_id', '')}_{ensure_str_or_none(r['event_time'])}", 
+                    axis=1
+                )
+                
+                # 删除重复项
+                purchase_df = purchase_df.drop_duplicates(subset=['purchase_key'])
+                
+                for _, row in purchase_df.iterrows():
+                    purchases_data.append((
+                        str(row['appsflyer_id']),
+                        ensure_str_or_none(row['event_time']),
+                        ensure_str_or_none(row['created_date']),
+                        str(row['country_code']) if not pd.isna(row['country_code']) else None,
+                        str(row['device_category']) if not pd.isna(row['device_category']) else None,
+                        float(row['event_revenue_usd']) if not pd.isna(row['event_revenue_usd']) else 0.0,
+                        str(row['product_id']) if not pd.isna(row['product_id']) else None,
+                        str(row.get('order_id', '')) if row.get('order_id') and not pd.isna(row.get('order_id')) else None
+                    ))
+            
+            # 批量插入购买数据
+            if purchases_data:
+                cursor.executemany(
+                    """
+                    INSERT INTO purchases 
+                    (appsflyer_id, purchase_time, created_date, 
+                     country_code, device_category, event_revenue_usd, 
+                     product_id, order_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    purchases_data
+                )
+                inserted_purchases = len(purchases_data)
+                logger.info(f"已插入 {inserted_purchases} 条购买数据")
+            
+            # 提交事务
+            conn.commit()
+            logger.info("数据处理完成并已提交到数据库")
+            
+        except Exception as e:
+            # 回滚事务
+            conn.rollback()
+            logger.error(f"数据处理失败，已回滚: {e}")
+            raise
+        finally:
+            # 关闭数据库连接
+            conn.close()
+        
+        logger.info(f"CSV数据处理完成，共处理 {total_rows} 行数据")
+        logger.info(f"统计结果: 插入用户 {inserted_users}, 事件 {inserted_events}, 购买 {inserted_purchases}")
         
     except Exception as e:
-        logger.error(f"数据处理失败: {e}")
+        logger.error(f"处理CSV数据时出错: {e}")
         raise
-    finally:
-        if conn:
-            conn.close()
 
 if __name__ == "__main__":
     process_csv_data() 
