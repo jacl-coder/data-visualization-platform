@@ -8,7 +8,7 @@ namespace fs = std::filesystem;
 int main(int argc, char** argv) {
     // 默认数据库路径
     std::string dbPath = "../../database/app.db";
-    int port = 50000;
+    int port = 40001;
 
     // 检查命令行参数
     if (argc > 1) {

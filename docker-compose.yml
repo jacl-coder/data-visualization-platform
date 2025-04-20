@@ -1,0 +1,23 @@
+services:
+  # 后端服务
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: data-viz-backend
+    volumes:
+      - ./database:/app/database
+    command: ["/app/api_server", "/app/database/app.db", "40001"]
+    restart: unless-stopped
+
+  # 前端服务
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: data-viz-frontend
+    depends_on:
+      - backend
+    ports:
+      - "40000:80"
+    restart: unless-stopped 

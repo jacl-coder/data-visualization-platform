@@ -18,7 +18,7 @@ DATA_PROCESSING_DIR="$PROJECT_DIR/data_processing"
 DATABASE_DIR="$PROJECT_DIR/database"
 
 # 后端和前端服务的URL
-BACKEND_URL="http://localhost:50000"
+BACKEND_URL="http://localhost:40001"
 FRONTEND_URL="http://localhost:40000"
 
 # 记录进程ID
@@ -705,7 +705,7 @@ function start_services() {
             fi
         # 如果curl不可用，尝试使用nc命令
         elif command -v nc &> /dev/null; then
-            if nc -z -w 2 localhost 50000; then
+            if nc -z -w 2 localhost 40001; then
                 echo -e "  - ${GREEN}后端服务已就绪${NC}"
                 break
             fi
@@ -717,7 +717,7 @@ function start_services() {
             fi
         # 最后尝试使用纯bash进行TCP连接测试
         else
-            if (echo > /dev/tcp/localhost/50000) &> /dev/null; then
+            if (echo > /dev/tcp/localhost/40001) &> /dev/null; then
                 echo -e "  - ${GREEN}后端服务已就绪${NC}"
                 break
             fi

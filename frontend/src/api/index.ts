@@ -14,9 +14,14 @@ const RETRY_DELAY = 1000
 
 // 判断API基础路径
 const getBaseUrl = (): string => {
+  // 优先使用环境变量中定义的API基础路径（如果存在）
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL as string;
+  }
+  
   // 如果是开发环境，直接连接到本地后端
   if (import.meta.env.DEV) {
-    return 'http://localhost:50000';
+    return 'http://localhost:40001';
   }
   
   // 生产环境使用相对路径，通过Nginx代理

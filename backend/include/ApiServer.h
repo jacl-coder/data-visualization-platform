@@ -37,7 +37,7 @@ public:
      * @param dbPath 数据库文件路径
      * @param port 服务器端口
      */
-    ApiServer(const std::string& dbPath, int port = 50000);
+    ApiServer(const std::string& dbPath, int port = 40001);
 
     /**
      * 启动服务器
