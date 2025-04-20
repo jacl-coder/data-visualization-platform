@@ -12,9 +12,20 @@ const MAX_RETRIES = 2
 // 重试延迟（毫秒）
 const RETRY_DELAY = 1000
 
+// 判断API基础路径
+const getBaseUrl = (): string => {
+  // 如果是开发环境，直接连接到本地后端
+  if (import.meta.env.DEV) {
+    return 'http://localhost:50000';
+  }
+  
+  // 生产环境使用相对路径，通过Nginx代理
+  return '/api';
+}
+
 // 创建axios实例
 const apiClient = axios.create({
-  baseURL: 'http://localhost:8080', // 默认连接到本地后端服务
+  baseURL: getBaseUrl(),
   timeout: 10000, // 请求超时时间
   headers: {
     'Content-Type': 'application/json',
@@ -274,7 +285,7 @@ export const safeApiCall = async <T>(
 export const getServerStatus = async (): Promise<ApiResponse<string> | null> => {
   return safeApiCall(
     async () => {
-      const response = await apiClient.get<ApiResponse<string>>('/')
+      const response = await apiClient.get<ApiResponse<string>>(import.meta.env.DEV ? '/' : '')
       return response.data
     },
     'server_status',

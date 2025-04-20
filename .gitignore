@@ -49,6 +49,15 @@ backend/cmake_install.cmake
 backend/Makefile
 backend/*.cmake
 
+# docker & nginx
+docker-compose.yml
+Dockerfile.backend
+Dockerfile.frontend
+build-docker.sh
+build-image.sh
+.dockerignore
+nginx.conf
+
 # 编译中间文件
 *.o
 *.obj

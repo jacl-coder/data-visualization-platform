@@ -288,7 +288,7 @@ npm run dev
 ```
 
 3. 访问应用
-打开浏览器访问 http://localhost:5173
+打开浏览器访问 http://localhost:40000
 
 ## 数据库设计
 系统使用SQLite数据库，主要包含以下表：
