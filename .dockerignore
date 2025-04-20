@@ -1,0 +1,42 @@
+# 通用忽略
+.git
+.gitignore
+.dockerignore
+Dockerfile*
+docker-compose.yml
+*.md
+.DS_Store
+.vscode
+.idea
+
+# 前端忽略
+frontend/node_modules
+frontend/dist
+frontend/coverage
+frontend/npm-debug.log
+frontend/yarn-debug.log
+frontend/yarn-error.log
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# 后端忽略
+backend/build
+backend/bin
+backend/install
+backend/.cache
+backend/obj
+backend/lib
+backend/Debug
+backend/Release
+backend/*.o
+backend/*.so
+backend/*.a
+
+# 其他
+*.log
+temp
+tmp
+venv
+后端考核/ 
