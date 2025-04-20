@@ -51,7 +51,6 @@ backend/*.cmake
 
 # docker & nginx
 docker-compose.portainer.yml
-build.sh
 
 # 编译中间文件
 *.o

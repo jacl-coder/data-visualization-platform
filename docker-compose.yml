@@ -7,6 +7,9 @@ services:
     container_name: data-viz-backend
     volumes:
       - ./database:/app/database
+    # 仅对内部网络暴露端口，不映射到主机
+    expose:
+      - "40001"
     command: ["/app/api_server", "/app/database/app.db", "40001"]
     restart: unless-stopped
 

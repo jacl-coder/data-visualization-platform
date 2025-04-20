@@ -346,6 +346,19 @@ function check_dependencies() {
         else
             echo -e "${GREEN}sqlite3安装成功!${NC}"
         fi
+    else
+        # 即使sqlite3命令存在，也确保安装了开发库
+        echo -e "  - 检测到sqlite3已安装，确保开发库也已安装..."
+        if [ "$OS_TYPE" == "debian" ]; then
+            sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+            echo -e "  - ${GREEN}确保libsqlite3-dev已安装√${NC}"
+        elif [ "$OS_TYPE" == "redhat" ]; then
+            sudo yum install -y sqlite-devel
+            echo -e "  - ${GREEN}确保sqlite-devel已安装√${NC}"
+        elif [ "$OS_TYPE" == "mac" ]; then
+            # macOS上的sqlite通常已包含开发文件
+            echo -e "  - ${GREEN}macOS上的sqlite包含开发文件√${NC}"
+        fi
     fi
     
     SQLITE_VERSION=$(sqlite3 --version | awk '{print $1}')
@@ -627,8 +640,38 @@ function build_backend() {
     mkdir -p build
     cd build
     
+    # 确定SQLite3库的位置
+    SQLITE3_INCLUDE=""
+    SQLITE3_LIBRARY=""
+    
+    if [ "$OS_TYPE" == "debian" ]; then
+        if [ -f "/usr/include/sqlite3.h" ]; then
+            SQLITE3_INCLUDE="/usr/include"
+        elif [ -f "/usr/local/include/sqlite3.h" ]; then
+            SQLITE3_INCLUDE="/usr/local/include"
+        fi
+        
+        if [ -f "/usr/lib/x86_64-linux-gnu/libsqlite3.so" ]; then
+            SQLITE3_LIBRARY="/usr/lib/x86_64-linux-gnu/libsqlite3.so"
+        elif [ -f "/usr/lib/libsqlite3.so" ]; then
+            SQLITE3_LIBRARY="/usr/lib/libsqlite3.so"
+        elif [ -f "/usr/local/lib/libsqlite3.so" ]; then
+            SQLITE3_LIBRARY="/usr/local/lib/libsqlite3.so"
+        fi
+    fi
+    
     echo -e "  - 配置CMake项目..."
-    cmake -DCMAKE_BUILD_TYPE=Release ..
+    
+    # 如果找到了SQLite3库路径，则使用它们
+    if [ -n "$SQLITE3_INCLUDE" ] && [ -n "$SQLITE3_LIBRARY" ]; then
+        echo -e "  - 使用手动指定的SQLite3库位置..."
+        cmake -DCMAKE_BUILD_TYPE=Release \
+              -DSQLite3_INCLUDE_DIR="$SQLITE3_INCLUDE" \
+              -DSQLite3_LIBRARY="$SQLITE3_LIBRARY" ..
+    else
+        # 否则使用默认路径
+        cmake -DCMAKE_BUILD_TYPE=Release ..
+    fi
     
     if [ $? -ne 0 ]; then
         echo -e "${RED}错误: CMake配置失败${NC}"

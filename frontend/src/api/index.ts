@@ -24,8 +24,8 @@ const getBaseUrl = (): string => {
     return 'http://localhost:40001';
   }
   
-  // 生产环境使用空字符串，API路径已经包含/api前缀
-  return '';
+  // 生产环境始终使用相对路径，通过Nginx代理
+  return '/api';
 }
 
 // 创建axios实例
