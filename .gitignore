@@ -50,11 +50,8 @@ backend/Makefile
 backend/*.cmake
 
 # docker & nginx
-docker-compose.yml
-Dockerfile.backend
-Dockerfile.frontend
-build-docker.sh
-build-image.sh
+docker-compose.portainer.yml
+build.sh
 .dockerignore
 nginx.conf
 
